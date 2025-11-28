@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:sqflite/sqflite.dart';
+
 import '../../core/theme/app_colors.dart';
 import '../../core/database/app_database.dart';
 import '../../core/network/api_client.dart';
@@ -13,8 +13,8 @@ import 'todo_detail_screen.dart';
 
 class TodoListScreen extends StatefulWidget {
   final SharedPreferences prefs;
-  
-  const TodoListScreen({Key? key, required this.prefs}) : super(key: key);
+
+  const TodoListScreen({super.key, required this.prefs});
 
   @override
   State<TodoListScreen> createState() => _TodoListScreenState();
@@ -45,14 +45,14 @@ class _TodoListScreenState extends State<TodoListScreen> {
 
   Future<void> _loadTodos() async {
     setState(() => _isLoading = true);
-    
+
     try {
       await _checkConnectivity();
-      
+
       // ONLY PostgreSQL - SQLite disabled for testing
       try {
         final apiTodos = await _todoService.getTodos();
-        
+
         // TODO: Save to SQLite later for offline
         // final db = await _database.database;
         // for (var todoJson in apiTodos) {
@@ -62,9 +62,12 @@ class _TodoListScreenState extends State<TodoListScreen> {
         //     conflictAlgorithm: ConflictAlgorithm.replace,
         //   );
         // }
-        
+
         setState(() {
-          _todos = apiTodos.map((json) => Todo.fromJson(json)).where((t) => !t.isDeleted).toList();
+          _todos = apiTodos
+              .map((json) => Todo.fromJson(json))
+              .where((t) => !t.isDeleted)
+              .toList();
           _isLoading = false;
         });
       } catch (e) {
@@ -90,7 +93,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
   //     whereArgs: [0],
   //     orderBy: 'position DESC, created_at DESC',
   //   );
-  //   
+  //
   //   setState(() {
   //     _todos = result.map((json) => Todo.fromJson(json)).toList();
   //     _isLoading = false;
@@ -114,7 +117,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
       isCompleted: !todo.isCompleted,
       updatedAt: DateTime.now(),
     );
-    
+
     setState(() {
       final index = _todos.indexWhere((t) => t.clientId == todo.clientId);
       if (index != -1) {
@@ -125,15 +128,17 @@ class _TodoListScreenState extends State<TodoListScreen> {
     try {
       // ONLY PostgreSQL API
       await _todoService.toggleComplete(todo.clientId!, !todo.isCompleted);
-      
+
       // TODO: Update SQLite later
       // final db = await _database.database;
       // await db.update(...);
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(updatedTodo.isCompleted ? 'Đã hoàn thành ✓' : 'Đã hủy hoàn thành'),
+            content: Text(
+              updatedTodo.isCompleted ? 'Đã hoàn thành ✓' : 'Đã hủy hoàn thành',
+            ),
             backgroundColor: AppColors.success,
             duration: const Duration(seconds: 1),
           ),
@@ -183,17 +188,17 @@ class _TodoListScreenState extends State<TodoListScreen> {
       try {
         // ONLY PostgreSQL API
         await _todoService.deleteTodo(todo.clientId!);
-        
+
         // TODO: Also delete from SQLite later
         // final db = await _database.database;
         // await db.update(...);
-        
+
         await _loadTodos();
-        
+
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đã xóa công việc')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Đã xóa công việc')));
         }
       } catch (e) {
         _showError('Lỗi khi xóa: $e');
@@ -259,8 +264,14 @@ class _TodoListScreenState extends State<TodoListScreen> {
             },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'all', child: Text('Tất cả')),
-              const PopupMenuItem(value: 'active', child: Text('Chưa hoàn thành')),
-              const PopupMenuItem(value: 'completed', child: Text('Đã hoàn thành')),
+              const PopupMenuItem(
+                value: 'active',
+                child: Text('Chưa hoàn thành'),
+              ),
+              const PopupMenuItem(
+                value: 'completed',
+                child: Text('Đã hoàn thành'),
+              ),
             ],
           ),
         ],
@@ -268,164 +279,169 @@ class _TodoListScreenState extends State<TodoListScreen> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _filteredTodos.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.check_circle_outline,
-                        size: 100,
-                        color: Colors.grey[300],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Chưa có công việc nào',
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                              color: Colors.grey,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Nhấn nút + để thêm mới',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.grey,
-                            ),
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 100,
+                    color: Colors.grey[300],
                   ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadTodos,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _filteredTodos.length,
-                    itemBuilder: (context, index) {
-                      final todo = _filteredTodos[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.all(16),
-                          leading: Checkbox(
-                            value: todo.isCompleted,
-                            onChanged: (value) => _toggleComplete(todo),
-                            shape: const CircleBorder(),
-                          ),
-                          title: Text(
-                            todo.title,
-                            style: TextStyle(
-                              decoration: todo.isCompleted
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                              fontWeight: FontWeight.w600,
+                  const SizedBox(height: 16),
+                  Text(
+                    'Chưa có công việc nào',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.headlineSmall?.copyWith(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Nhấn nút + để thêm mới',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+                  ),
+                ],
+              ),
+            )
+          : RefreshIndicator(
+              onRefresh: _loadTodos,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: _filteredTodos.length,
+                itemBuilder: (context, index) {
+                  final todo = _filteredTodos[index];
+                  return Card(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(16),
+                      leading: Checkbox(
+                        value: todo.isCompleted,
+                        onChanged: (value) => _toggleComplete(todo),
+                        shape: const CircleBorder(),
+                      ),
+                      title: Text(
+                        todo.title,
+                        style: TextStyle(
+                          decoration: todo.isCompleted
+                              ? TextDecoration.lineThrough
+                              : null,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (todo.description != null &&
+                              todo.description!.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              todo.description!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          ],
+                          const SizedBox(height: 8),
+                          Row(
                             children: [
-                              if (todo.description != null && todo.description!.isNotEmpty) ...[
-                                const SizedBox(height: 4),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _getPriorityColor(
+                                    todo.priority,
+                                  ).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  _getPriorityLabel(todo.priority),
+                                  style: TextStyle(
+                                    color: _getPriorityColor(todo.priority),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                              if (todo.dueDate != null) ...[
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.calendar_today,
+                                  size: 14,
+                                  color: Colors.grey,
+                                ),
+                                const SizedBox(width: 4),
                                 Text(
-                                  todo.description!,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
+                                  DateFormat(
+                                    'dd/MM/yyyy',
+                                  ).format(todo.dueDate!),
+                                  style: const TextStyle(fontSize: 12),
                                 ),
                               ],
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _getPriorityColor(todo.priority)
-                                          .withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      _getPriorityLabel(todo.priority),
-                                      style: TextStyle(
-                                        color: _getPriorityColor(todo.priority),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                  if (todo.dueDate != null) ...[
-                                    const SizedBox(width: 8),
-                                    const Icon(
-                                      Icons.calendar_today,
-                                      size: 14,
-                                      color: Colors.grey,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      DateFormat('dd/MM/yyyy').format(todo.dueDate!),
-                                      style: const TextStyle(fontSize: 12),
-                                    ),
-                                  ],
-                                ],
-                              ),
                             ],
                           ),
-                          trailing: PopupMenuButton(
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit),
-                                    SizedBox(width: 8),
-                                    Text('Sửa'),
-                                  ],
-                                ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.delete, color: AppColors.error),
-                                    SizedBox(width: 8),
-                                    Text('Xóa', style: TextStyle(color: AppColors.error)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                            onSelected: (value) async {
-                              if (value == 'edit') {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TodoFormScreen(todo: todo),
-                                  ),
-                                );
-                                if (result == true) _loadTodos();
-                              } else if (value == 'delete') {
-                                _deleteTodo(todo);
-                              }
-                            },
+                        ],
+                      ),
+                      trailing: PopupMenuButton(
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit),
+                                SizedBox(width: 8),
+                                Text('Sửa'),
+                              ],
+                            ),
                           ),
-                          onTap: () {
-                            Navigator.push(
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete, color: AppColors.error),
+                                SizedBox(width: 8),
+                                Text(
+                                  'Xóa',
+                                  style: TextStyle(color: AppColors.error),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                        onSelected: (value) async {
+                          if (value == 'edit') {
+                            final result = await Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => TodoDetailScreen(todo: todo),
+                                builder: (_) => TodoFormScreen(todo: todo),
                               ),
                             );
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                ),
+                            if (result == true) _loadTodos();
+                          } else if (value == 'delete') {
+                            _deleteTodo(todo);
+                          }
+                        },
+                      ),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => TodoDetailScreen(todo: todo),
+                          ),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const TodoFormScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const TodoFormScreen()),
           );
           if (result == true) _loadTodos();
         },

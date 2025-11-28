@@ -7,7 +7,7 @@ import '../../features/todo/domain/entities/todo.dart';
 class TodoFormScreen extends StatefulWidget {
   final Todo? todo; // null = create mode, not null = edit mode
   
-  const TodoFormScreen({Key? key, this.todo}) : super(key: key);
+  const TodoFormScreen({super.key, this.todo});
 
   @override
   State<TodoFormScreen> createState() => _TodoFormScreenState();
@@ -230,7 +230,7 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
             
             // Priority
             DropdownButtonFormField<String>(
-              value: _priority,
+              initialValue: _priority,
               decoration: const InputDecoration(
                 labelText: 'Độ ưu tiên',
                 prefixIcon: Icon(Icons.flag),

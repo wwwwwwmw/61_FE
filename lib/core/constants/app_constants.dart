@@ -1,7 +1,7 @@
 class AppConstants {
   // API Configuration - Use LAN IP for physical device (adjust IP to your PC's if different)
   // The backend listens on 0.0.0.0:3000; physical device must call the PC's IP.
-  static const String baseUrl = 'http://172.20.10.3:3000';
+  static const String baseUrl = 'http://localhost:3000';
 
   // API prefix
   static const String apiPrefix = '/api';

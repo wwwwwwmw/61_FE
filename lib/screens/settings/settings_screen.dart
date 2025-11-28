@@ -9,10 +9,10 @@ class SettingsScreen extends StatelessWidget {
   final VoidCallback onThemeToggle;
   
   const SettingsScreen({
-    Key? key,
+    super.key,
     required this.prefs,
     required this.onThemeToggle,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

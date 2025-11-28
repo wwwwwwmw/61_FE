@@ -18,7 +18,7 @@ void main() async {
 class MyApp extends StatefulWidget {
   final SharedPreferences prefs;
   
-  const MyApp({Key? key, required this.prefs}) : super(key: key);
+  const MyApp({super.key, required this.prefs});
 
   @override
   State<MyApp> createState() => _MyAppState();

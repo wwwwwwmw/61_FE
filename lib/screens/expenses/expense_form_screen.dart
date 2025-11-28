@@ -8,8 +8,8 @@ import '../../core/database/app_database.dart';
 
 class ExpenseFormScreen extends StatefulWidget {
   final Map<String, dynamic>? expense;
-  
-  const ExpenseFormScreen({Key? key, this.expense}) : super(key: key);
+
+  const ExpenseFormScreen({super.key, this.expense});
 
   @override
   State<ExpenseFormScreen> createState() => _ExpenseFormScreenState();
@@ -19,7 +19,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   String _type = 'expense';
   DateTime _date = DateTime.now();
   String _paymentMethod = 'cash';
@@ -51,7 +51,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    
+
     if (date != null) {
       setState(() => _date = date);
     }
@@ -65,13 +65,13 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
     try {
       final amount = double.parse(_amountController.text);
       final now = DateTime.now();
-      
+
       final expenseData = {
         'client_id': widget.expense?['client_id'] ?? const Uuid().v4(),
         'amount': amount,
         'type': _type,
-        'description': _descriptionController.text.isEmpty 
-            ? null 
+        'description': _descriptionController.text.isEmpty
+            ? null
             : _descriptionController.text,
         'date': _date.toIso8601String(),
         'payment_method': _paymentMethod,
@@ -86,18 +86,18 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
         final prefs = await SharedPreferences.getInstance();
         final expensesJson = prefs.getString('expenses') ?? '[]';
         final List<dynamic> expenses = json.decode(expensesJson);
-        
+
         if (widget.expense == null) {
           expenses.add(expenseData);
         } else {
           final index = expenses.indexWhere(
-            (e) => e['client_id'] == widget.expense!['client_id']
+            (e) => e['client_id'] == widget.expense!['client_id'],
           );
           if (index != -1) {
             expenses[index] = expenseData;
           }
         }
-        
+
         await prefs.setString('expenses', json.encode(expenses));
       } else {
         final db = await AppDatabase().database;
@@ -117,19 +117,18 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.expense == null 
-                ? 'Đã thêm giao dịch' 
-                : 'Đã cập nhật giao dịch'),
+            content: Text(
+              widget.expense == null
+                  ? 'Đã thêm giao dịch'
+                  : 'Đã cập nhật giao dịch',
+            ),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi: $e'),
-            backgroundColor: AppColors.error,
-          ),
+          SnackBar(content: Text('Lỗi: $e'), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -143,7 +142,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.expense == null ? 'Thêm Giao Dịch' : 'Sửa Giao Dịch'),
+        title: Text(
+          widget.expense == null ? 'Thêm Giao Dịch' : 'Sửa Giao Dịch',
+        ),
         actions: [
           if (_isLoading)
             const Center(
@@ -157,10 +158,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
               ),
             )
           else
-            IconButton(
-              icon: const Icon(Icons.check),
-              onPressed: _saveExpense,
-            ),
+            IconButton(icon: const Icon(Icons.check), onPressed: _saveExpense),
         ],
       ),
       body: Form(
@@ -188,7 +186,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                         onSelected: (selected) {
                           if (selected) setState(() => _type = 'expense');
                         },
-                        selectedColor: AppColors.error.withOpacity(0.2),
+                        selectedColor: AppColors.error.withValues(alpha: 0.2),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -206,16 +204,16 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                         onSelected: (selected) {
                           if (selected) setState(() => _type = 'income');
                         },
-                        selectedColor: AppColors.success.withOpacity(0.2),
+                        selectedColor: AppColors.success.withValues(alpha: 0.2),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Amount
             TextFormField(
               controller: _amountController,
@@ -225,7 +223,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                 prefixIcon: const Icon(Icons.attach_money),
                 suffixText: '₫',
                 labelStyle: TextStyle(
-                  color: _type == 'income' ? AppColors.success : AppColors.error,
+                  color: _type == 'income'
+                      ? AppColors.success
+                      : AppColors.error,
                 ),
               ),
               keyboardType: TextInputType.number,
@@ -240,9 +240,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
               },
               textInputAction: TextInputAction.next,
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Description
             TextFormField(
               controller: _descriptionController,
@@ -260,12 +260,12 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
               },
               textInputAction: TextInputAction.next,
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Payment Method
             DropdownButtonFormField<String>(
-              value: _paymentMethod,
+              initialValue: _paymentMethod,
               decoration: const InputDecoration(
                 labelText: 'Phương thức thanh toán',
                 prefixIcon: Icon(Icons.payment),
@@ -280,9 +280,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                 setState(() => _paymentMethod = value!);
               },
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Date
             Card(
               child: ListTile(
@@ -293,9 +293,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                 onTap: _selectDate,
               ),
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // Save Button
             SizedBox(
               height: 50,
@@ -311,9 +311,13 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                         ),
                       )
                     : const Icon(Icons.check),
-                label: Text(widget.expense == null ? 'Thêm Giao Dịch' : 'Cập Nhật'),
+                label: Text(
+                  widget.expense == null ? 'Thêm Giao Dịch' : 'Cập Nhật',
+                ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _type == 'income' ? AppColors.success : AppColors.error,
+                  backgroundColor: _type == 'income'
+                      ? AppColors.success
+                      : AppColors.error,
                   foregroundColor: Colors.white,
                 ),
               ),

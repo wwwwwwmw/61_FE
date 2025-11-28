@@ -23,7 +23,7 @@ class AuthService {
   Future<bool> sendOtp(String email, {String type = 'registration'}) async {
     try {
       final res = await _dio.post(
-        AppConstants.authEndpoint + '/send-otp',
+        '${AppConstants.authEndpoint}/send-otp',
         data: {'email': email, 'type': type},
       );
       return res.data['success'] == true;
@@ -36,7 +36,7 @@ class AuthService {
   Future<bool> verifyOtp(String email, String otp) async {
     try {
       final res = await _dio.post(
-        AppConstants.authEndpoint + '/verify-otp',
+        '${AppConstants.authEndpoint}/verify-otp',
         data: {'email': email, 'otp': otp},
       );
       return res.data['success'] == true && res.data['verified'] == true;
@@ -54,7 +54,7 @@ class AuthService {
   }) async {
     try {
       final response = await _dio.post(
-        AppConstants.authEndpoint + '/register',
+        '${AppConstants.authEndpoint}/register',
         data: {
           'email': email,
           'password': password,
@@ -81,7 +81,7 @@ class AuthService {
   }) async {
     try {
       final response = await _dio.post(
-        AppConstants.authEndpoint + '/register',
+        '${AppConstants.authEndpoint}/register',
         data: {
           'email': email,
           'password': password,
@@ -102,7 +102,7 @@ class AuthService {
   }) async {
     try {
       final response = await _dio.post(
-        AppConstants.authEndpoint + '/login',
+        '${AppConstants.authEndpoint}/login',
         data: {'email': email, 'password': password},
       );
       if (response.data['success'] != true) {
@@ -122,7 +122,7 @@ class AuthService {
     if (refreshToken == null) return null;
     try {
       final res = await _dio.post(
-        AppConstants.authEndpoint + '/refresh',
+        '${AppConstants.authEndpoint}/refresh',
         data: {'refreshToken': refreshToken},
       );
       if (res.data['success'] == true) {

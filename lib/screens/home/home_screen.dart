@@ -11,10 +11,10 @@ class HomeScreen extends StatefulWidget {
   final VoidCallback onThemeToggle;
   
   const HomeScreen({
-    Key? key,
+    super.key,
     required this.prefs,
     required this.onThemeToggle,
-  }) : super(key: key);
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();

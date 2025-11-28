@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ung_dung_tien_ich/core/sqflite_export.dart';
 import 'dart:convert';
 import '../features/todo/domain/entities/todo.dart';
 import 'database/app_database.dart';

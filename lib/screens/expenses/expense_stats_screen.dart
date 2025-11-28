@@ -4,14 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
-import 'dart:math' as math;
 import '../../core/theme/app_colors.dart';
 import '../../core/database/app_database.dart';
 
 class ExpenseStatsScreen extends StatefulWidget {
   final SharedPreferences prefs;
-  
-  const ExpenseStatsScreen({Key? key, required this.prefs}) : super(key: key);
+
+  const ExpenseStatsScreen({super.key, required this.prefs});
 
   @override
   State<ExpenseStatsScreen> createState() => _ExpenseStatsScreenState();
@@ -22,7 +21,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
   String _selectedPeriod = 'month'; // today, week, month, year
   List<Map<String, dynamic>> _transactions = [];
   Map<String, double> _categoryStats = {};
-  List<Color> _chartColors = [
+  final List<Color> _chartColors = [
     Colors.blue,
     Colors.red,
     Colors.green,
@@ -41,7 +40,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
 
   Future<void> _loadStats() async {
     setState(() => _isLoading = true);
-    
+
     try {
       if (kIsWeb) {
         final prefs = await SharedPreferences.getInstance();
@@ -69,7 +68,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
     // Filter by period
     final now = DateTime.now();
     DateTime startDate;
-    
+
     switch (_selectedPeriod) {
       case 'today':
         startDate = DateTime(now.year, now.month, now.day);
@@ -83,12 +82,12 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
       default: // month
         startDate = DateTime(now.year, now.month, 1);
     }
-    
+
     final filtered = allTransactions.where((t) {
       final date = DateTime.parse(t['date'] as String);
       return date.isAfter(startDate) && t['type'] == 'expense';
     }).toList();
-    
+
     // Calculate category stats
     final Map<String, double> stats = {};
     for (var transaction in filtered) {
@@ -96,10 +95,10 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
       final amount = (transaction['amount'] is int)
           ? (transaction['amount'] as int).toDouble()
           : (transaction['amount'] as double? ?? 0.0);
-      
+
       stats[category] = (stats[category] ?? 0) + amount;
     }
-    
+
     setState(() {
       _transactions = filtered;
       _categoryStats = stats;
@@ -107,7 +106,11 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
   }
 
   String _formatCurrency(double amount) {
-    final formatter = NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0);
+    final formatter = NumberFormat.currency(
+      locale: 'vi_VN',
+      symbol: '₫',
+      decimalDigits: 0,
+    );
     return formatter.format(amount);
   }
 
@@ -118,9 +121,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Thống Kê Chi Tiêu'),
-      ),
+      appBar: AppBar(title: const Text('Thống Kê Chi Tiêu')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -128,34 +129,34 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
               children: [
                 // Period Selector
                 _buildPeriodSelector(),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Total Expense Card
                 _buildTotalCard(),
-                
+
                 const SizedBox(height: 24),
-                
+
                 // Pie Chart
                 if (_categoryStats.isNotEmpty) ...[
                   Text(
                     'Chi Tiêu Theo Danh Mục',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   _buildPieChart(),
                   const SizedBox(height: 24),
                 ],
-                
+
                 // Category Breakdown
                 if (_categoryStats.isNotEmpty) ...[
                   Text(
                     'Chi Tiết',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   ..._buildCategoryList(),
@@ -199,7 +200,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
             });
           }
         },
-        selectedColor: AppColors.primary.withOpacity(0.2),
+        selectedColor: AppColors.primary.withValues(alpha: 0.2),
       ),
     );
   }
@@ -208,12 +209,12 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.error, AppColors.error.withOpacity(0.7)],
+          colors: [AppColors.error, AppColors.error.withValues(alpha: 0.7)],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.error.withOpacity(0.3),
+            color: AppColors.error.withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -225,10 +226,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
         children: [
           const Text(
             'Tổng Chi Tiêu',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: Colors.white70, fontSize: 16),
           ),
           const SizedBox(height: 8),
           Text(
@@ -242,10 +240,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
           const SizedBox(height: 8),
           Text(
             '${_transactions.length} giao dịch',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
         ],
       ),
@@ -254,9 +249,9 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
 
   Widget _buildPieChart() {
     if (_categoryStats.isEmpty) return const SizedBox();
-    
+
     final entries = _categoryStats.entries.toList();
-    
+
     return SizedBox(
       height: 250,
       child: PieChart(
@@ -265,7 +260,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
             final index = entry.key;
             final data = entry.value;
             final percentage = (data.value / _totalExpense * 100);
-            
+
             return PieChartSectionData(
               value: data.value,
               title: '${percentage.toStringAsFixed(1)}%',
@@ -288,13 +283,13 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
   List<Widget> _buildCategoryList() {
     final entries = _categoryStats.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    
+
     return entries.asMap().entries.map((entry) {
       final index = entry.key;
       final data = entry.value;
       final percentage = (data.value / _totalExpense * 100);
       final color = _chartColors[index % _chartColors.length];
-      
+
       return Card(
         margin: const EdgeInsets.only(bottom: 8),
         child: ListTile(
@@ -302,7 +297,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(Icons.category, color: color),
@@ -331,17 +326,13 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
         padding: const EdgeInsets.all(32.0),
         child: Column(
           children: [
-            Icon(
-              Icons.bar_chart,
-              size: 80,
-              color: Colors.grey[300],
-            ),
+            Icon(Icons.bar_chart, size: 80, color: Colors.grey[300]),
             const SizedBox(height: 16),
             Text(
               'Chưa có dữ liệu',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.grey,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: Colors.grey),
             ),
             const SizedBox(height: 8),
             Text(

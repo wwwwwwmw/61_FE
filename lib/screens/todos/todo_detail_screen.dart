@@ -7,8 +7,8 @@ import 'todo_form_screen.dart';
 
 class TodoDetailScreen extends StatefulWidget {
   final Todo todo;
-  
-  const TodoDetailScreen({Key? key, required this.todo}) : super(key: key);
+
+  const TodoDetailScreen({super.key, required this.todo});
 
   @override
   State<TodoDetailScreen> createState() => _TodoDetailScreenState();
@@ -58,24 +58,23 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
         where: 'client_id = ?',
         whereArgs: [_todo.clientId],
       );
-      
+
       setState(() {
         _todo = _todo.copyWith(isCompleted: !_todo.isCompleted);
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_todo.isCompleted 
-              ? 'Đã đánh dấu hoàn thành' 
-              : 'Đã đánh dấu chưa hoàn thành'),
+          content: Text(
+            _todo.isCompleted
+                ? 'Đã đánh dấu hoàn thành'
+                : 'Đã đánh dấu chưa hoàn thành',
+          ),
         ),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Lỗi: $e'),
-          backgroundColor: AppColors.error,
-        ),
+        SnackBar(content: Text('Lỗi: $e'), backgroundColor: AppColors.error),
       );
     }
   }
@@ -116,12 +115,12 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
           where: 'client_id = ?',
           whereArgs: [_todo.clientId],
         );
-        
+
         if (mounted) {
           Navigator.pop(context, true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Đã xóa công việc')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Đã xóa công việc')));
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -145,19 +144,14 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             onPressed: () async {
               final result = await Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => TodoFormScreen(todo: _todo),
-                ),
+                MaterialPageRoute(builder: (_) => TodoFormScreen(todo: _todo)),
               );
               if (result == true && mounted) {
                 Navigator.pop(context, true);
               }
             },
           ),
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: _deleteTodo,
-          ),
+          IconButton(icon: const Icon(Icons.delete), onPressed: _deleteTodo),
         ],
       ),
       body: ListView(
@@ -165,13 +159,17 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
         children: [
           // Status Card
           Card(
-            color: _todo.isCompleted ? AppColors.success.withOpacity(0.1) : null,
+            color: _todo.isCompleted
+                ? AppColors.success.withValues(alpha: 0.1)
+                : null,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
                   Icon(
-                    _todo.isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
+                    _todo.isCompleted
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
                     color: _todo.isCompleted ? AppColors.success : Colors.grey,
                     size: 32,
                   ),
@@ -181,9 +179,14 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _todo.isCompleted ? 'Đã hoàn thành' : 'Chưa hoàn thành',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: _todo.isCompleted ? AppColors.success : Colors.grey,
+                          _todo.isCompleted
+                              ? 'Đã hoàn thành'
+                              : 'Chưa hoàn thành',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: _todo.isCompleted
+                                    ? AppColors.success
+                                    : Colors.grey,
                                 fontWeight: FontWeight.bold,
                               ),
                         ),
@@ -203,9 +206,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Title
           Card(
             child: Padding(
@@ -227,14 +230,14 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                   Text(
                     _todo.title,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-          
+
           // Description
           if (_todo.description != null && _todo.description!.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -264,18 +267,23 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               ),
             ),
           ],
-          
+
           const SizedBox(height: 8),
-          
+
           // Priority
           Card(
             child: ListTile(
               leading: const Icon(Icons.flag),
               title: const Text('Độ ưu tiên'),
               trailing: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                  color: _getPriorityColor(_todo.priority).withOpacity(0.1),
+                  color: _getPriorityColor(
+                    _todo.priority,
+                  ).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -288,7 +296,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               ),
             ),
           ),
-          
+
           // Tags
           if (_todo.tags.isNotEmpty) ...[
             const SizedBox(height: 8),
@@ -312,18 +320,24 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
-                      children: _todo.tags.map((tag) => Chip(
-                        label: Text(tag),
-                        backgroundColor: AppColors.primary.withOpacity(0.1),
-                        labelStyle: TextStyle(color: AppColors.primary),
-                      )).toList(),
+                      children: _todo.tags
+                          .map(
+                            (tag) => Chip(
+                              label: Text(tag),
+                              backgroundColor: AppColors.primary.withValues(
+                                alpha: 0.1,
+                              ),
+                              labelStyle: TextStyle(color: AppColors.primary),
+                            ),
+                          )
+                          .toList(),
                     ),
                   ],
                 ),
               ),
             ),
           ],
-          
+
           // Due Date
           if (_todo.dueDate != null) ...[
             const SizedBox(height: 8),
@@ -331,11 +345,16 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               child: ListTile(
                 leading: const Icon(Icons.calendar_today),
                 title: const Text('Ngày hạn'),
-                subtitle: Text(DateFormat('EEEE, dd/MM/yyyy', 'vi_VN').format(_todo.dueDate!)),
+                subtitle: Text(
+                  DateFormat(
+                    'EEEE, dd/MM/yyyy',
+                    'vi_VN',
+                  ).format(_todo.dueDate!),
+                ),
               ),
             ),
           ],
-          
+
           // Reminder
           if (_todo.reminderTime != null) ...[
             const SizedBox(height: 8),
@@ -349,20 +368,20 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
               ),
             ),
           ],
-          
+
           const SizedBox(height: 16),
           const Divider(),
           const SizedBox(height: 8),
-          
+
           // Metadata
           Text(
             'Thông tin khác',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          
+
           Card(
             child: Column(
               children: [

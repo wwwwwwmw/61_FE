@@ -10,8 +10,8 @@ import 'expense_stats_screen.dart';
 
 class ExpenseHomeScreen extends StatefulWidget {
   final SharedPreferences prefs;
-  
-  const ExpenseHomeScreen({Key? key, required this.prefs}) : super(key: key);
+
+  const ExpenseHomeScreen({super.key, required this.prefs});
 
   @override
   State<ExpenseHomeScreen> createState() => _ExpenseHomeScreenState();
@@ -31,14 +31,14 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    
+
     try {
       if (kIsWeb) {
         // Load from SharedPreferences for web
         final prefs = await SharedPreferences.getInstance();
         final expensesJson = prefs.getString('expenses') ?? '[]';
         final List<dynamic> expenses = json.decode(expensesJson);
-        
+
         _calculateStats(expenses);
       } else {
         // Load from SQLite
@@ -50,7 +50,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
           orderBy: 'date DESC',
           limit: 10,
         );
-        
+
         _calculateStats(result);
       }
     } catch (e) {
@@ -63,28 +63,35 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
   void _calculateStats(List<dynamic> expenses) {
     double income = 0;
     double expense = 0;
-    
+
     for (var item in expenses) {
-      final amount = (item['amount'] is int) 
+      final amount = (item['amount'] is int)
           ? (item['amount'] as int).toDouble()
           : (item['amount'] as double? ?? 0.0);
-      
+
       if (item['type'] == 'income') {
         income += amount;
       } else {
         expense += amount;
       }
     }
-    
+
     setState(() {
       _totalIncome = income;
       _totalExpense = expense;
-      _recentTransactions = expenses.take(10).cast<Map<String, dynamic>>().toList();
+      _recentTransactions = expenses
+          .take(10)
+          .cast<Map<String, dynamic>>()
+          .toList();
     });
   }
 
   String _formatCurrency(double amount) {
-    final formatter = NumberFormat.currency(locale: 'vi_VN', symbol: '₫', decimalDigits: 0);
+    final formatter = NumberFormat.currency(
+      locale: 'vi_VN',
+      symbol: '₫',
+      decimalDigits: 0,
+    );
     return formatter.format(amount);
   }
 
@@ -113,7 +120,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final balance = _totalIncome - _totalExpense;
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Quản Lý Chi Tiêu'),
@@ -140,14 +147,14 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
                 children: [
                   // Summary Card
                   _buildSummaryCard(balance),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Quick Stats
                   _buildQuickStats(),
-                  
+
                   const SizedBox(height: 24),
-                  
+
                   // Recent Transactions Header
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -155,8 +162,8 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
                       Text(
                         'Giao Dịch Gần Đây',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                       if (_recentTransactions.isNotEmpty)
                         TextButton(
@@ -167,16 +174,16 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
                         ),
                     ],
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   // Recent Transactions List
                   if (_recentTransactions.isEmpty)
                     _buildEmptyState()
                   else
-                    ..._recentTransactions.map((transaction) => 
-                      _buildTransactionItem(transaction)
-                    ).toList(),
+                    ..._recentTransactions.map(
+                      (transaction) => _buildTransactionItem(transaction),
+                    ),
                 ],
               ),
             ),
@@ -184,9 +191,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
         onPressed: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const ExpenseFormScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const ExpenseFormScreen()),
           );
           if (result == true) _loadData();
         },
@@ -209,7 +214,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.3),
+            color: AppColors.primary.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -221,10 +226,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
         children: [
           const Text(
             'Tổng Số Dư',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 16,
-            ),
+            style: TextStyle(color: Colors.white70, fontSize: 16),
           ),
           const SizedBox(height: 8),
           Text(
@@ -262,11 +264,16 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
     );
   }
 
-  Widget _buildSummaryItem(String label, String amount, IconData icon, Color color) {
+  Widget _buildSummaryItem(
+    String label,
+    String amount,
+    IconData icon,
+    Color color,
+  ) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -278,10 +285,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
               const SizedBox(width: 4),
               Text(
                 label,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                ),
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
             ],
           ),
@@ -316,7 +320,12 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
         Expanded(
           child: _buildStatCard(
             'Trung Bình',
-            _formatCurrency(_totalExpense / (_recentTransactions.isEmpty ? 1 : _recentTransactions.length)),
+            _formatCurrency(
+              _totalExpense /
+                  (_recentTransactions.isEmpty
+                      ? 1
+                      : _recentTransactions.length),
+            ),
             Icons.trending_down,
             Colors.orange,
           ),
@@ -325,7 +334,12 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+  Widget _buildStatCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -337,16 +351,13 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
             const SizedBox(height: 8),
             Text(
               value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ),
@@ -360,12 +371,12 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
         : (transaction['amount'] as double? ?? 0.0);
     final description = transaction['description'] as String? ?? 'Giao dịch';
     final date = DateTime.parse(transaction['date'] as String);
-    
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: _getTypeColor(type).withOpacity(0.1),
+          backgroundColor: _getTypeColor(type).withValues(alpha: 0.1),
           child: Icon(
             _getCategoryIcon(transaction['category_id']?.toString()),
             color: _getTypeColor(type),
@@ -405,9 +416,9 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
             const SizedBox(height: 16),
             Text(
               'Chưa có giao dịch nào',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.grey,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: Colors.grey),
             ),
             const SizedBox(height: 8),
             const Text(

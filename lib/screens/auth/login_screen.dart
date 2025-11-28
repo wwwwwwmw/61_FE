@@ -8,7 +8,7 @@ import '../home/home_screen.dart';
 class LoginScreen extends StatefulWidget {
   final SharedPreferences prefs;
   
-  const LoginScreen({Key? key, required this.prefs}) : super(key: key);
+  const LoginScreen({super.key, required this.prefs});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
