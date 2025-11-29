@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Import này quan trọng
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
-import '../../features/expenses/domain/entities/expense.dart'; // Import Expense entity
+import '../../features/expenses/domain/entities/expense.dart';
 
 class ExpenseFormScreen extends StatefulWidget {
-  final SharedPreferences prefs; // Thêm biến này
-  final Expense? expense;        // Thêm biến này để hỗ trợ Edit
+  final SharedPreferences prefs;
+  final dynamic expense; // Hỗ trợ cả Map và Object Expense
 
-  // Cập nhật Constructor
   const ExpenseFormScreen({
     super.key, 
     required this.prefs, 
@@ -29,33 +28,25 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   @override
   void initState() {
     super.initState();
-    // Fill data nếu là edit mode
     if (widget.expense != null) {
-      _amountController.text = widget.expense!.amount.toString();
-      _descController.text = widget.expense!.description ?? '';
+      final amt = widget.expense is Map ? widget.expense['amount'] : widget.expense.amount;
+      final desc = widget.expense is Map ? widget.expense['description'] : widget.expense.description;
+      _amountController.text = amt.toString();
+      _descController.text = desc ?? '';
     }
-  }
-
-  @override
-  void dispose() {
-    _amountController.dispose();
-    _descController.dispose();
-    super.dispose();
   }
 
   Future<void> _saveExpense() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     try {
-      // [SỬA LỖI] Truyền prefs vào ApiClient
-      final client = ApiClient(widget.prefs);
+      final client = ApiClient(widget.prefs); // [FIX]
       
       final data = {
         'amount': double.parse(_amountController.text),
         'type': 'expense',
-        'category_id': 1, // Tạm thời hardcode, bạn nên làm dropdown chọn category
+        'category_id': 1,
         'description': _descController.text,
         'date': DateTime.now().toIso8601String(),
         'payment_method': 'cash',
@@ -63,37 +54,22 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
 
       late final response;
       if (widget.expense == null) {
-        // Create
         response = await client.post(AppConstants.expensesEndpoint, data: data);
       } else {
-        // Update
-        response = await client.put(
-          '${AppConstants.expensesEndpoint}/${widget.expense!.id}', 
-          data: data
-        );
+        final id = widget.expense is Map ? widget.expense['id'] : widget.expense.id;
+        response = await client.put('${AppConstants.expensesEndpoint}/$id', data: data);
       }
 
       if (response.data['success']) {
-        // Xử lý cảnh báo ngân sách (chỉ khi tạo mới)
         if (widget.expense == null && response.data['budgetAlert'] != null) {
           final alert = response.data['budgetAlert'];
           if (mounted) {
             await showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
-                title: Text(
-                  alert['type'] == 'danger' ? '⚠️ Cảnh báo' : '🔔 Thông báo',
-                  style: TextStyle(
-                    color: alert['type'] == 'danger' ? Colors.red : Colors.orange,
-                  ),
-                ),
+                title: Text(alert['type'] == 'danger' ? '⚠️ Cảnh báo' : '🔔 Thông báo'),
                 content: Text(alert['message']),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('Đóng'),
-                  )
-                ],
+                actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Đóng'))],
               ),
             );
           }
@@ -101,20 +77,16 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
         if (mounted) Navigator.pop(context, true);
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-      }
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if(mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.expense == null ? 'Thêm khoản chi' : 'Sửa khoản chi'),
-      ),
+      appBar: AppBar(title: Text(widget.expense == null ? 'Thêm khoản chi' : 'Sửa khoản chi')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -125,7 +97,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                 controller: _amountController,
                 decoration: const InputDecoration(labelText: 'Số tiền'),
                 keyboardType: TextInputType.number,
-                validator: (v) => (v == null || v.isEmpty) ? 'Nhập số tiền' : null,
+                validator: (v) => v!.isEmpty ? 'Nhập số tiền' : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -133,19 +105,9 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                 decoration: const InputDecoration(labelText: 'Mô tả'),
               ),
               const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _saveExpense,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(widget.expense == null ? 'Lưu' : 'Cập nhật'),
-                ),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _saveExpense,
+                child: _isLoading ? const CircularProgressIndicator() : const Text('Lưu'),
               ),
             ],
           ),

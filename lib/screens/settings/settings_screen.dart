@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/services/auth_service.dart';
+import '../../core/theme/app_colors.dart';
 import '../auth/login_screen.dart';
-import '../categories/category_list_screen.dart';
+import '../categories/category_list_screen.dart'; // Import màn hình danh mục
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   final SharedPreferences prefs;
   final VoidCallback onThemeToggle;
-  
+
   const SettingsScreen({
     super.key,
     required this.prefs,
@@ -16,145 +17,145 @@ class SettingsScreen extends StatelessWidget {
   });
 
   @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  late final AuthService _authService;
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = AuthService(widget.prefs);
+  }
+
+  Future<void> _logout() async {
+    await _authService.logout();
+    if (mounted) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => LoginScreen(prefs: widget.prefs)),
+        (route) => false,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final userName = prefs.getString(AppConstants.userNameKey) ?? 'User';
-    final userEmail = prefs.getString(AppConstants.userEmailKey) ?? '';
+    final userName = widget.prefs.getString(AppConstants.userNameKey) ?? 'User';
+    final userEmail = widget.prefs.getString(AppConstants.userEmailKey) ?? '';
+    final isDarkMode = widget.prefs.getString(AppConstants.themeKey) == 'dark';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Cài Đặt'),
-      ),
+      appBar: AppBar(title: const Text('Cài đặt')),
       body: ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: AppColors.primaryGradient,
+          // User Info Card
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                    child: Text(
+                      userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          userName,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          userEmail,
+                          style: TextStyle(color: Colors.grey[600]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
+          ),
+          const SizedBox(height: 24),
+
+          // Settings Options
+          const Text(
+            'Chung',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey,
+            ),
+          ),
+          const SizedBox(height: 8),
+          
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Column(
               children: [
-                const CircleAvatar(
-                  radius: 40,
-                  backgroundColor: Colors.white,
-                  child: Icon(
-                    Icons.person,
-                    size: 50,
-                    color: AppColors.primary,
+                ListTile(
+                  leading: const Icon(Icons.dark_mode_outlined),
+                  title: const Text('Giao diện tối'),
+                  trailing: Switch(
+                    value: isDarkMode,
+                    onChanged: (value) => widget.onThemeToggle(),
+                    activeColor: AppColors.primary,
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  userName,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
+                const Divider(height: 1),
+                // [FIX] Mục Quản lý Danh mục
+                ListTile(
+                  leading: const Icon(Icons.category_outlined),
+                  title: const Text('Quản lý Danh mục'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CategoryListScreen(prefs: widget.prefs),
+                      ),
+                    );
+                  },
                 ),
-                Text(
-                  userEmail,
-                  style: const TextStyle(color: Colors.white70),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.language_outlined),
+                  title: const Text('Ngôn ngữ'),
+                  trailing: const Text('Tiếng Việt'),
+                  onTap: () {},
                 ),
               ],
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.dark_mode),
-            title: const Text('Chế độ tối'),
-            trailing: Switch(
-              value: Theme.of(context).brightness == Brightness.dark,
-              onChanged: (_) => onThemeToggle(),
+          
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout, color: Colors.red),
+              label: const Text('Đăng xuất', style: TextStyle(color: Colors.red)),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.red),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
             ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.category_outlined),
-            title: const Text('Quản lý Danh mục'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CategoryListScreen(prefs: widget.prefs),
-                ),
-              );
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.sync),
-            title: const Text('Đồng bộ dữ liệu'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Tính năng đang phát triển')),
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.cloud_upload),
-            title: const Text('Sao lưu'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Tính năng đang phát triển')),
-              );
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.info),
-            title: const Text('Về ứng dụng'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              showAboutDialog(
-                context: context,
-                applicationName: 'Ứng Dụng Tiện Ích',
-                applicationVersion: '1.0.0',
-                applicationLegalese: '© 2024 Đề tài 61',
-              );
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.logout, color: AppColors.error),
-            title: const Text(
-              'Đăng xuất',
-              style: TextStyle(color: AppColors.error),
-            ),
-            onTap: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Xác nhận đăng xuất'),
-                  content: const Text('Bạn có chắc muốn đăng xuất?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Hủy'),
-                    ),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.error,
-                        foregroundColor: Colors.white,
-                      ),
-                      child: const Text('Đăng xuất'),
-                    ),
-                  ],
-                ),
-              );
-
-              if (confirm == true && context.mounted) {
-                await prefs.clear();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(
-                    builder: (_) => LoginScreen(prefs: prefs),
-                  ),
-                  (route) => false,
-                );
-              }
-            },
           ),
         ],
       ),

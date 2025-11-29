@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../core/network/api_client.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
+import '../../features/todo/domain/entities/todo.dart'; // [QUAN TRỌNG] Import Todo Entity
 import 'todo_form_screen.dart';
 
 class TodoDetailScreen extends StatefulWidget {
@@ -17,7 +18,7 @@ class TodoDetailScreen extends StatefulWidget {
 }
 
 class _TodoDetailScreenState extends State<TodoDetailScreen> {
-  Map<String, dynamic>? _todo;
+  Todo? _todo; // [FIX] Đổi kiểu từ Map thành Todo object
   bool _isLoading = true;
 
   @override
@@ -32,12 +33,13 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       final res = await client.get('${AppConstants.todosEndpoint}/${widget.todoId}');
       if (res.data['success']) {
         setState(() {
-          _todo = res.data['data'];
+          // [FIX] Parse JSON thành Todo object ngay khi lấy về
+          _todo = Todo.fromJson(res.data['data']);
           _isLoading = false;
         });
       }
     } catch (e) {
-      if(mounted) Navigator.pop(context); // Lỗi thì thoát ra
+      if(mounted) Navigator.pop(context); 
     }
   }
 
@@ -58,7 +60,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       try {
         final client = ApiClient(widget.prefs);
         await client.delete('${AppConstants.todosEndpoint}/${widget.todoId}');
-        if(mounted) Navigator.pop(context, true); // Trả về true để màn hình trước reload
+        if(mounted) Navigator.pop(context, true); 
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
@@ -77,17 +79,16 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () async {
-              // Chuyển sang màn hình sửa
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (_) => TodoFormScreen(
                     prefs: widget.prefs,
-                    todo: _todo, // Truyền dữ liệu hiện tại sang để sửa
+                    todo: _todo, // [OK] Giờ _todo đã là kiểu Todo, truyền sang Form OK
                   ),
                 ),
               );
-              if (result == true) _fetchDetail(); // Reload lại chi tiết sau khi sửa
+              if (result == true) _fetchDetail(); 
             },
           ),
           IconButton(
@@ -102,24 +103,42 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              _todo!['title'],
+              _todo!.title,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: AppColors.primary
               ),
             ),
             const SizedBox(height: 16),
-            _buildInfoRow(Icons.description, 'Mô tả', _todo!['description'] ?? 'Không có mô tả'),
+            _buildInfoRow(Icons.description, 'Mô tả', _todo!.description ?? 'Không có mô tả'),
             const SizedBox(height: 12),
-            _buildInfoRow(Icons.flag, 'Độ ưu tiên', _todo!['priority'].toString().toUpperCase()),
+            _buildInfoRow(Icons.flag, 'Độ ưu tiên', _todo!.priority.toUpperCase()),
             const SizedBox(height: 12),
-            if (_todo!['due_date'] != null)
+            if (_todo!.dueDate != null)
               _buildInfoRow(Icons.calendar_today, 'Hạn chót', 
-                DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(_todo!['due_date']).toLocal())),
+                DateFormat('dd/MM/yyyy HH:mm').format(_todo!.dueDate!)),
             const SizedBox(height: 12),
-            _buildInfoRow(Icons.category, 'Danh mục ID', _todo!['category_id'].toString()),
+            _buildInfoRow(Icons.category, 'Danh mục ID', _todo!.categoryId?.toString() ?? 'Chưa phân loại'),
             const SizedBox(height: 12),
-            _buildInfoRow(Icons.info_outline, 'Trạng thái', _todo!['is_completed'] ? 'Đã xong' : 'Đang thực hiện'),
+            _buildInfoRow(Icons.info_outline, 'Trạng thái', _todo!.isCompleted ? 'Đã xong' : 'Đang thực hiện'),
+            const SizedBox(height: 12),
+            // Hiển thị Tags
+            Row(
+              children: [
+                const Icon(Icons.label, size: 20, color: Colors.grey),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    children: _todo!.tags.map((tag) => Chip(
+                      label: Text(tag),
+                      backgroundColor: AppColors.primary.withOpacity(0.1),
+                      labelStyle: TextStyle(color: AppColors.primary),
+                    )).toList(),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),

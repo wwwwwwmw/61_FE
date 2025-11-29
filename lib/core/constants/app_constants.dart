@@ -21,7 +21,7 @@ class AppConstants {
   static const String lastSyncKey = 'last_sync_time';
   static const String themeKey = 'theme_mode';
   
-  // [BỔ SUNG] Các key bị thiếu gây lỗi
+  // [CÁC KEY BỊ THIẾU GÂY LỖI]
   static const String userIdKey = 'user_id';
   static const String userEmailKey = 'user_email';
   static const String userNameKey = 'user_name';
@@ -33,7 +33,6 @@ class AppConstants {
   
   // Timeouts & Intervals
   static const Duration syncInterval = Duration(minutes: 5);
-  // [BỔ SUNG] Timeout
   static const Duration connectionTimeout = Duration(seconds: 30);
   static const Duration receiveTimeout = Duration(seconds: 30);
 
