@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
-import 'dart:convert';
 import '../../core/theme/app_colors.dart';
-import '../../core/database/app_database.dart';
+import '../../core/network/api_client.dart';
+import '../../core/services/expenses_service.dart';
+import '../../features/expenses/domain/entities/expense.dart';
 
 class ExpenseFormScreen extends StatefulWidget {
-  final Map<String, dynamic>? expense;
+  final SharedPreferences prefs;
+  final Expense? expense;
 
-  const ExpenseFormScreen({super.key, this.expense});
+  const ExpenseFormScreen({
+    super.key,
+    required this.prefs,
+    this.expense,
+  });
 
   @override
   State<ExpenseFormScreen> createState() => _ExpenseFormScreenState();
@@ -24,16 +28,19 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   DateTime _date = DateTime.now();
   String _paymentMethod = 'cash';
   bool _isLoading = false;
+  late final ExpensesService _expensesService;
 
   @override
   void initState() {
     super.initState();
+    _expensesService = ExpensesService(ApiClient(widget.prefs));
+
     if (widget.expense != null) {
-      _amountController.text = widget.expense!['amount'].toString();
-      _descriptionController.text = widget.expense!['description'] ?? '';
-      _type = widget.expense!['type'];
-      _date = DateTime.parse(widget.expense!['date']);
-      _paymentMethod = widget.expense!['payment_method'] ?? 'cash';
+      _amountController.text = widget.expense!.amount.toStringAsFixed(0);
+      _descriptionController.text = widget.expense!.description ?? '';
+      _type = widget.expense!.type;
+      _date = widget.expense!.date;
+      _paymentMethod = widget.expense!.paymentMethod ?? 'cash';
     }
   }
 
@@ -63,54 +70,20 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final amount = double.parse(_amountController.text);
-      final now = DateTime.now();
-
+      final amount = double.parse(_amountController.text.replaceAll(',', ''));
+      
       final expenseData = {
-        'client_id': widget.expense?['client_id'] ?? const Uuid().v4(),
         'amount': amount,
         'type': _type,
-        'description': _descriptionController.text.isEmpty
-            ? null
-            : _descriptionController.text,
+        'description': _descriptionController.text.trim(),
         'date': _date.toIso8601String(),
         'payment_method': _paymentMethod,
-        'created_at': widget.expense?['created_at'] ?? now.toIso8601String(),
-        'updated_at': now.toIso8601String(),
-        'is_deleted': 0,
-        'is_synced': 0,
-        'version': (widget.expense?['version'] ?? 0) + 1,
       };
 
-      if (kIsWeb) {
-        final prefs = await SharedPreferences.getInstance();
-        final expensesJson = prefs.getString('expenses') ?? '[]';
-        final List<dynamic> expenses = json.decode(expensesJson);
-
-        if (widget.expense == null) {
-          expenses.add(expenseData);
-        } else {
-          final index = expenses.indexWhere(
-            (e) => e['client_id'] == widget.expense!['client_id'],
-          );
-          if (index != -1) {
-            expenses[index] = expenseData;
-          }
-        }
-
-        await prefs.setString('expenses', json.encode(expenses));
+      if (widget.expense == null) {
+        await _expensesService.createExpense(expenseData);
       } else {
-        final db = await AppDatabase().database;
-        if (widget.expense == null) {
-          await db.insert('expenses', expenseData);
-        } else {
-          await db.update(
-            'expenses',
-            expenseData,
-            where: 'client_id = ?',
-            whereArgs: [widget.expense!['client_id']],
-          );
-        }
+        await _expensesService.updateExpense(widget.expense!.id.toString(), expenseData);
       }
 
       if (mounted) {
@@ -122,6 +95,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                   ? 'Đã thêm giao dịch'
                   : 'Đã cập nhật giao dịch',
             ),
+            backgroundColor: AppColors.success,
           ),
         );
       }
@@ -233,7 +207,7 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                 if (value == null || value.isEmpty) {
                   return 'Vui lòng nhập số tiền';
                 }
-                if (double.tryParse(value) == null) {
+                if (double.tryParse(value.replaceAll(',', '')) == null) {
                   return 'Số tiền không hợp lệ';
                 }
                 return null;

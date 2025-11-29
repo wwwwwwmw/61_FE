@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
-import 'dart:convert';
 import '../../core/theme/app_colors.dart';
-import '../../core/database/app_database.dart';
+import '../../core/network/api_client.dart';
+import '../../core/services/expenses_service.dart';
+import '../../features/expenses/domain/entities/expense.dart';
 import 'expense_form_screen.dart';
+import 'expense_detail_screen.dart';
 import 'expense_stats_screen.dart';
 
 class ExpenseHomeScreen extends StatefulWidget {
@@ -21,11 +22,13 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
   bool _isLoading = true;
   double _totalIncome = 0;
   double _totalExpense = 0;
-  List<Map<String, dynamic>> _recentTransactions = [];
+  List<Expense> _recentTransactions = [];
+  late final ExpensesService _expensesService;
 
   @override
   void initState() {
     super.initState();
+    _expensesService = ExpensesService(ApiClient(widget.prefs));
     _loadData();
   }
 
@@ -33,56 +36,48 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
     setState(() => _isLoading = true);
 
     try {
-      if (kIsWeb) {
-        // Load from SharedPreferences for web
-        final prefs = await SharedPreferences.getInstance();
-        final expensesJson = prefs.getString('expenses') ?? '[]';
-        final List<dynamic> expenses = json.decode(expensesJson);
+      final data = await _expensesService.getExpenses();
+      final List<dynamic> expensesData = data['data'] ?? []; // Assuming API returns { data: [...] } or similar
+      // Adjust based on actual API response structure. 
+      // If getExpenses returns Map<String, dynamic> from response.data, and response.data['data'] is the list.
+      // Let's check getExpenses implementation again. 
+      // It returns Map<String, dynamic>.from(res.data).
+      // So if res.data is { success: true, data: [...] }, then data['data'] is the list.
+      
+      final List<Expense> expenses = expensesData
+          .map((e) => Expense.fromJson(e))
+          .toList();
 
-        _calculateStats(expenses);
-      } else {
-        // Load from SQLite
-        final db = await AppDatabase().database;
-        final result = await db.query(
-          'expenses',
-          where: 'is_deleted = ?',
-          whereArgs: [0],
-          orderBy: 'date DESC',
-          limit: 10,
-        );
-
-        _calculateStats(result);
-      }
+      _calculateStats(expenses);
     } catch (e) {
       print('Error loading expenses: $e');
+      // Handle error (show snackbar, etc.)
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  void _calculateStats(List<dynamic> expenses) {
+  void _calculateStats(List<Expense> expenses) {
     double income = 0;
     double expense = 0;
 
     for (var item in expenses) {
-      final amount = (item['amount'] is int)
-          ? (item['amount'] as int).toDouble()
-          : (item['amount'] as double? ?? 0.0);
-
-      if (item['type'] == 'income') {
-        income += amount;
+      if (item.type == 'income') {
+        income += item.amount;
       } else {
-        expense += amount;
+        expense += item.amount;
       }
     }
+
+    // Sort by date descending
+    expenses.sort((a, b) => b.date.compareTo(a.date));
 
     setState(() {
       _totalIncome = income;
       _totalExpense = expense;
-      _recentTransactions = expenses
-          .take(10)
-          .cast<Map<String, dynamic>>()
-          .toList();
+      _recentTransactions = expenses.take(10).toList();
     });
   }
 
@@ -100,7 +95,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
   }
 
   IconData _getCategoryIcon(String? category) {
-    // Simple icon mapping
+    // Simple icon mapping - can be improved with a Category model/service
     switch (category) {
       case 'food':
         return Icons.restaurant;
@@ -168,7 +163,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
                       if (_recentTransactions.isNotEmpty)
                         TextButton(
                           onPressed: () {
-                            // Navigate to all transactions
+                            // Navigate to all transactions (ExpenseListScreen) if implemented
                           },
                           child: const Text('Xem tất cả'),
                         ),
@@ -191,7 +186,9 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
         onPressed: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const ExpenseFormScreen()),
+            MaterialPageRoute(
+              builder: (_) => ExpenseFormScreen(prefs: widget.prefs),
+            ),
           );
           if (result == true) _loadData();
         },
@@ -214,7 +211,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.3),
+            color: AppColors.primary.withOpacity(0.3),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -273,7 +270,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.2),
+        color: Colors.white.withOpacity(0.2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -364,39 +361,58 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
     );
   }
 
-  Widget _buildTransactionItem(Map<String, dynamic> transaction) {
-    final type = transaction['type'] as String;
-    final amount = (transaction['amount'] is int)
-        ? (transaction['amount'] as int).toDouble()
-        : (transaction['amount'] as double? ?? 0.0);
-    final description = transaction['description'] as String? ?? 'Giao dịch';
-    final date = DateTime.parse(transaction['date'] as String);
-
+  Widget _buildTransactionItem(Expense transaction) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: _getTypeColor(type).withValues(alpha: 0.1),
+          backgroundColor: _getTypeColor(transaction.type).withOpacity(0.1),
           child: Icon(
-            _getCategoryIcon(transaction['category_id']?.toString()),
-            color: _getTypeColor(type),
+            _getCategoryIcon(transaction.categoryId),
+            color: _getTypeColor(transaction.type),
           ),
         ),
         title: Text(
-          description,
+          transaction.description ?? 'Giao dịch',
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
-        subtitle: Text(DateFormat('dd/MM/yyyy').format(date)),
+        subtitle: Text(DateFormat('dd/MM/yyyy').format(transaction.date)),
         trailing: Text(
-          '${type == 'income' ? '+' : '-'}${_formatCurrency(amount)}',
+          '${transaction.type == 'income' ? '+' : '-'}${_formatCurrency(transaction.amount)}',
           style: TextStyle(
-            color: _getTypeColor(type),
+            color: _getTypeColor(transaction.type),
             fontWeight: FontWeight.bold,
             fontSize: 16,
           ),
         ),
-        onTap: () {
-          // Navigate to transaction detail
+        onTap: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ExpenseDetailScreen(
+                expense: transaction,
+                prefs: widget.prefs,
+                onDelete: () async {
+                  try {
+                    await _expensesService.deleteExpense(transaction.id.toString());
+                    _loadData();
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Lỗi xóa: $e')),
+                    );
+                  }
+                },
+                onUpdate: (updatedExpense) {
+                  // _loadData() will be called when returning from detail screen if we handle it there
+                  // But here we pass a callback, or we can just reload when returning.
+                },
+              ),
+            ),
+          );
+          
+          if (result == true) {
+            _loadData();
+          }
         },
       ),
     );

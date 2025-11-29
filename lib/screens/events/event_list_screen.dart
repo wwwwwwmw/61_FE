@@ -1,66 +1,34 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // Import chuẩn
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/network/api_client.dart';
+import '../../core/services/event_service.dart';
+import '../../features/events/domain/entities/event.dart';
+import 'event_form_screen.dart';
 
-// --- 1. MODEL CLASS ---
-class EventModel {
-  final int id;
-  final String title;
-  final DateTime eventDate;
-  final String themeColor;
-  final bool isAnnual;
-
-  EventModel({
-    required this.id,
-    required this.title,
-    required this.eventDate,
-    required this.themeColor,
-    required this.isAnnual,
-  });
-
-  factory EventModel.fromJson(Map<String, dynamic> json) {
-    return EventModel(
-      id: json['id'],
-      title: json['title'],
-      eventDate: DateTime.parse(json['event_date']),
-      themeColor:
-          json['color'] ??
-          json['theme_color'] ??
-          '#FF5722', // Support cả 2 key màu
-      isAnnual:
-          json['is_recurring'] == 1 ||
-          json['is_annual'] == true, // Support cả 2 kiểu boolean
-    );
-  }
-}
-
-// --- 2. MAIN SCREEN ---
 class EventListScreen extends StatefulWidget {
-  final SharedPreferences prefs; // 1. Thêm biến để lưu prefs
+  final SharedPreferences prefs;
 
-  const EventListScreen({super.key, required this.prefs}); // 2. Sửa constructor
+  const EventListScreen({super.key, required this.prefs});
 
   @override
   State<EventListScreen> createState() => _EventListScreenState();
 }
 
 class _EventListScreenState extends State<EventListScreen> {
-  late final ApiClient _apiClient; // 3. Dùng late để khởi tạo sau
-  List<EventModel> _events = [];
+  late final EventService _eventService;
+  List<Event> _events = [];
   bool _isLoading = true;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    // 4. Khởi tạo ApiClient với prefs được truyền từ widget cha
-    _apiClient = ApiClient(widget.prefs);
-
+    _eventService = EventService(ApiClient(widget.prefs));
     _fetchEvents();
 
-    // Tạo bộ đếm cập nhật giao diện mỗi giây
+    // Timer to update countdown every second
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) setState(() {});
     });
@@ -74,56 +42,76 @@ class _EventListScreenState extends State<EventListScreen> {
 
   Future<void> _fetchEvents() async {
     try {
-      // Gọi API lấy danh sách sự kiện
-      final response = await _apiClient.get('/events');
-      if (response.statusCode == 200) {
-        // Kiểm tra cấu trúc data trả về từ server
-        final List<dynamic> data = response.data['data'] ?? [];
-
-        if (mounted) {
-          setState(() {
-            _events = data.map((e) => EventModel.fromJson(e)).toList();
-            _isLoading = false;
-          });
-        }
+      final eventsData = await _eventService.getEvents();
+      if (mounted) {
+        setState(() {
+          _events = eventsData.map((e) => Event.fromJson(e)).toList();
+          _isLoading = false;
+        });
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        // Nếu lỗi, thêm dữ liệu giả để test giao diện
-        _addMockData();
-        print("Lỗi tải sự kiện (đã chuyển sang dữ liệu mẫu): $e");
+        // Don't show mock data on error, just show empty or error message
+        print("Error fetching events: $e");
       }
     }
   }
 
-  void _addMockData() {
-    _events = [
-      EventModel(
-        id: 1,
-        title: "Tết Nguyên Đán 2026",
-        eventDate: DateTime(2026, 2, 17),
-        themeColor: "#D32F2F", // Đỏ
-        isAnnual: true,
+  Future<void> _deleteEvent(Event event) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xóa sự kiện?'),
+        content: Text('Bạn có chắc muốn xóa "${event.title}" không?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
-      EventModel(
-        id: 2,
-        title: "Sinh nhật Mẹ",
-        eventDate: DateTime(2025, 12, 12),
-        themeColor: "#7B1FA2", // Tím
-        isAnnual: true,
-      ),
-      EventModel(
-        id: 3,
-        title: "Kỷ niệm ngày cưới",
-        eventDate: DateTime(2026, 5, 28),
-        themeColor: "#00796B", // Xanh ngọc
-        isAnnual: true,
-      ),
-    ];
+    );
+
+    if (confirm == true && event.id != null) {
+      try {
+        await _eventService.deleteEvent(event.id.toString());
+        _fetchEvents(); // Refresh list
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Đã xóa sự kiện')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi xóa: $e')),
+          );
+        }
+      }
+    }
   }
 
-  // Hàm chuyển đổi Hex String (#RRGGBB) sang Color
+  void _navigateToForm([Event? event]) async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EventFormScreen(
+          prefs: widget.prefs,
+          event: event,
+        ),
+      ),
+    );
+
+    if (result == true) {
+      _fetchEvents();
+    }
+  }
+
   Color _parseColor(String? hexColor) {
     if (hexColor == null || hexColor.isEmpty) return Colors.blue;
     try {
@@ -132,7 +120,7 @@ class _EventListScreenState extends State<EventListScreen> {
         return Color(int.parse("0xFF$hexColor"));
       }
     } catch (_) {}
-    return Colors.blue; // Màu mặc định nếu lỗi
+    return Colors.blue;
   }
 
   @override
@@ -144,32 +132,29 @@ class _EventListScreenState extends State<EventListScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Chức năng thêm sự kiện đang phát triển"),
-                ),
-              );
-            },
+            onPressed: () => _navigateToForm(),
           ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _events.isEmpty
-          ? const Center(child: Text("Chưa có sự kiện nào"))
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _events.length,
-              itemBuilder: (context, index) {
-                final event = _events[index];
-                return _buildEventCard(event);
-              },
-            ),
+              ? const Center(child: Text("Chưa có sự kiện nào"))
+              : RefreshIndicator(
+                  onRefresh: _fetchEvents,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _events.length,
+                    itemBuilder: (context, index) {
+                      final event = _events[index];
+                      return _buildEventCard(event);
+                    },
+                  ),
+                ),
     );
   }
 
-  Widget _buildEventCard(EventModel event) {
+  Widget _buildEventCard(Event event) {
     final now = DateTime.now();
     Duration difference = event.eventDate.difference(now);
     bool isPast = difference.isNegative;
@@ -181,68 +166,85 @@ class _EventListScreenState extends State<EventListScreen> {
 
     final color = _parseColor(event.themeColor);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.4),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Tiêu đề
-            Text(
-              event.title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
+    return GestureDetector(
+      onTap: () => _navigateToForm(event),
+      onLongPress: () => _deleteEvent(event),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.4),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-            const SizedBox(height: 4),
-            Text(
-              DateFormat('dd/MM/yyyy').format(event.eventDate),
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.9),
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Bộ đếm
-            isPast
-                ? const Center(
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header with Delete option (optional visual cue)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
                     child: Text(
-                      "Đã diễn ra",
-                      style: TextStyle(
+                      event.title,
+                      style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildTimeBlock(days, "Ngày"),
-                      _buildColon(),
-                      _buildTimeBlock(hours, "Giờ"),
-                      _buildColon(),
-                      _buildTimeBlock(minutes, "Phút"),
-                      _buildColon(),
-                      _buildTimeBlock(seconds, "Giây"),
-                    ],
                   ),
-          ],
+                  if (event.isAnnual)
+                    const Padding(
+                      padding: EdgeInsets.only(left: 8.0),
+                      child: Icon(Icons.loop, color: Colors.white70),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                DateFormat('dd/MM/yyyy HH:mm').format(event.eventDate),
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // Countdown
+              isPast
+                  ? const Center(
+                      child: Text(
+                        "Đã diễn ra",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildTimeBlock(days, "Ngày"),
+                        _buildColon(),
+                        _buildTimeBlock(hours, "Giờ"),
+                        _buildColon(),
+                        _buildTimeBlock(minutes, "Phút"),
+                        _buildColon(),
+                        _buildTimeBlock(seconds, "Giây"),
+                      ],
+                    ),
+            ],
+          ),
         ),
       ),
     );

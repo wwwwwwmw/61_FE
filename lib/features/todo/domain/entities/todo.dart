@@ -53,8 +53,8 @@ class Todo extends Equatable {
               ? (json['tags'] as String).split(',')
               : List<String>.from(json['tags']))
           : [],
-      dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
-      reminderTime: json['reminder_time'] != null ? DateTime.parse(json['reminder_time']) : null,
+      dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']).toLocal() : null,
+      reminderTime: json['reminder_time'] != null ? DateTime.parse(json['reminder_time']).toLocal() : null,
       position: json['position'] ?? 0,
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),

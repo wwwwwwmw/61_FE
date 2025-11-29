@@ -119,7 +119,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
     );
 
     setState(() {
-      final index = _todos.indexWhere((t) => t.clientId == todo.clientId);
+      final index = _todos.indexWhere((t) => t.id == todo.id);
       if (index != -1) {
         _todos[index] = updatedTodo;
       }
@@ -127,7 +127,11 @@ class _TodoListScreenState extends State<TodoListScreen> {
 
     try {
       // ONLY PostgreSQL API
-      await _todoService.toggleComplete(todo.clientId!, !todo.isCompleted);
+      if (todo.id != null) {
+          await _todoService.toggleComplete(todo.id.toString(), !todo.isCompleted);
+      } else {
+          throw Exception("Todo ID is null");
+      }
 
       // TODO: Update SQLite later
       // final db = await _database.database;
@@ -148,7 +152,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
       _showError('Lỗi API: $e');
       // Revert UI on error
       setState(() {
-        final index = _todos.indexWhere((t) => t.clientId == todo.clientId);
+        final index = _todos.indexWhere((t) => t.id == todo.id);
         if (index != -1) {
           _todos[index] = todo;
         }
@@ -187,7 +191,11 @@ class _TodoListScreenState extends State<TodoListScreen> {
     if (confirm == true) {
       try {
         // ONLY PostgreSQL API
-        await _todoService.deleteTodo(todo.clientId!);
+        if (todo.id != null) {
+            await _todoService.deleteTodo(todo.id.toString());
+        } else {
+             throw Exception("Todo ID is null");
+        }
 
         // TODO: Also delete from SQLite later
         // final db = await _database.database;
@@ -411,11 +419,14 @@ class _TodoListScreenState extends State<TodoListScreen> {
                           ),
                         ],
                         onSelected: (value) async {
-                          if (value == 'edit') {
+                            if (value == 'edit') {
                             final result = await Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => TodoFormScreen(todo: todo),
+                                builder: (_) => TodoFormScreen(
+                                  todo: todo,
+                                  prefs: widget.prefs,
+                                ),
                               ),
                             );
                             if (result == true) _loadTodos();
@@ -424,13 +435,17 @@ class _TodoListScreenState extends State<TodoListScreen> {
                           }
                         },
                       ),
-                      onTap: () {
-                        Navigator.push(
+                      onTap: () async {
+                        final result = await Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => TodoDetailScreen(todo: todo),
+                            builder: (_) => TodoDetailScreen(
+                              todo: todo,
+                              prefs: widget.prefs,
+                            ),
                           ),
                         );
+                        if (result == true) _loadTodos();
                       },
                     ),
                   );
@@ -441,7 +456,9 @@ class _TodoListScreenState extends State<TodoListScreen> {
         onPressed: () async {
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const TodoFormScreen()),
+            MaterialPageRoute(
+              builder: (_) => TodoFormScreen(prefs: widget.prefs),
+            ),
           );
           if (result == true) _loadTodos();
         },

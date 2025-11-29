@@ -39,7 +39,15 @@ class AuthService {
         '${AppConstants.authEndpoint}/verify-otp',
         data: {'email': email, 'otp': otp},
       );
-      return res.data['success'] == true && res.data['verified'] == true;
+      
+      if (res.data['success'] == true) {
+        // Backend returns tokens on successful verification
+        if (res.data['data'] != null) {
+          await _persistAuth(res.data['data']);
+        }
+        return true;
+      }
+      return false;
     } on DioException catch (e) {
       throw _handleError(e);
     }
@@ -163,7 +171,7 @@ class AuthService {
       if (user['email'] != null) {
         await _prefs.setString(AppConstants.userEmailKey, user['email']);
       }
-      final name = user['fullName'] ?? user['full_name'];
+      final name = user['fullName'] ?? user['full_name'] ?? user['name'];
       if (name != null) {
         await _prefs.setString(AppConstants.userNameKey, name);
       }

@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/services/auth_service.dart';
 import '../home/home_screen.dart';
+import 'otp_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final SharedPreferences prefs;
@@ -39,30 +40,14 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      Map<String, dynamic> response;
-      
       if (_isLogin) {
-        response = await _authService.login(
+        // Login flow
+        final response = await _authService.login(
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-      } else {
-        response = await _authService.registerSimple(
-          name: _nameController.text.trim(),
-          email: _emailController.text.trim(),
-          password: _passwordController.text,
-        );
-      }
-
-      if (response['success'] == true) {
-        // Save tokens and user info
-        final data = response['data'];
-        await widget.prefs.setString(AppConstants.accessTokenKey, data['accessToken']);
-        await widget.prefs.setString(AppConstants.refreshTokenKey, data['refreshToken']);
-        await widget.prefs.setInt(AppConstants.userIdKey, data['user']['id']);
-        await widget.prefs.setString(AppConstants.userEmailKey, data['user']['email']);
-        await widget.prefs.setString(AppConstants.userNameKey, data['user']['name']);
-
+        
+        // Response is the user data, tokens are already saved by auth service
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
@@ -72,6 +57,27 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           );
+        }
+      } else {
+        // Registration flow
+        final response = await _authService.registerSimple(
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+        
+        if (response['success'] == true && response['requireOtp'] == true) {
+          // Navigate to OTP verification screen
+          if (mounted) {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => OtpVerificationScreen(
+                  prefs: widget.prefs,
+                  email: _emailController.text.trim(),
+                ),
+              ),
+            );
+          }
         }
       }
     } catch (e) {

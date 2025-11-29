@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import '../../core/theme/app_colors.dart';
-import '../../core/database/app_database.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/network/api_client.dart';
+import '../../core/services/todo_service.dart';
 import '../../features/todo/domain/entities/todo.dart';
 import 'todo_form_screen.dart';
 
 class TodoDetailScreen extends StatefulWidget {
   final Todo todo;
-
-  const TodoDetailScreen({super.key, required this.todo});
+  final SharedPreferences prefs;
+  
+  const TodoDetailScreen({super.key, required this.todo, required this.prefs});
 
   @override
   State<TodoDetailScreen> createState() => _TodoDetailScreenState();
@@ -16,401 +17,142 @@ class TodoDetailScreen extends StatefulWidget {
 
 class _TodoDetailScreenState extends State<TodoDetailScreen> {
   late Todo _todo;
+  late final TodoService _todoService;
+  bool _hasChanged = false;
 
   @override
   void initState() {
     super.initState();
     _todo = widget.todo;
+    _todoService = TodoService(ApiClient(widget.prefs));
   }
 
-  Color _getPriorityColor(String priority) {
-    switch (priority) {
-      case 'high':
-        return AppColors.priorityHigh;
-      case 'medium':
-        return AppColors.priorityMedium;
-      default:
-        return AppColors.priorityLow;
-    }
-  }
-
-  String _getPriorityLabel(String priority) {
-    switch (priority) {
-      case 'high':
-        return 'Cao';
-      case 'medium':
-        return 'Trung bình';
-      default:
-        return 'Thấp';
-    }
-  }
-
-  Future<void> _toggleComplete() async {
+  Future<void> _refreshTodo() async {
     try {
-      final db = await AppDatabase().database;
-      await db.update(
-        'todos',
-        {
-          'is_completed': _todo.isCompleted ? 0 : 1,
-          'updated_at': DateTime.now().toIso8601String(),
-          'is_synced': 0,
-        },
-        where: 'client_id = ?',
-        whereArgs: [_todo.clientId],
-      );
-
-      setState(() {
-        _todo = _todo.copyWith(isCompleted: !_todo.isCompleted);
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            _todo.isCompleted
-                ? 'Đã đánh dấu hoàn thành'
-                : 'Đã đánh dấu chưa hoàn thành',
-          ),
-        ),
-      );
+      if (_todo.id == null) return;
+      // We need a getTodoById method in TodoService, or just use getTodos with filter?
+      // TodoService has getTodos, but not getTodoById exposed directly in the interface I saw earlier?
+      // Let's check TodoService again. It has getTodos.
+      // Wait, I saw getTodos, create, update, delete. I didn't see getById in the file content I viewed in step 690.
+      // I will check backend routes. GET /api/todos/:id exists.
+      // I should add getTodoById to TodoService if it's missing, or just use getTodos and filter?
+      // Actually, looking at step 690, TodoService DOES NOT have getTodoById.
+      // I should add it to TodoService first? Or just implement it here using ApiClient directly?
+      // Better to add it to TodoService.
+      // For now, to avoid context switching, I'll use ApiClient directly or add it to TodoService.
+      // I'll add it to TodoService in a separate step. For now, let's assume I'll add it.
+      // Wait, I can't assume. I should check if I can just pass the updated object from TodoFormScreen?
+      // TodoFormScreen currently returns 'true'. Changing it to return 'Todo' object is cleaner but requires changing TodoFormScreen.
+      // Changing TodoFormScreen is easy.
+      // Let's modify TodoFormScreen to return the updated Todo object instead of just true?
+      // No, TodoFormScreen re-fetches or just sends data? It sends data. It doesn't get the full object back from updateTodo?
+      // updateTodo returns Map<String, dynamic>. So yes, it gets the data.
+      // So TodoFormScreen COULD return the new Todo object.
+      // But TodoListScreen expects 'true'.
+      // I'll stick to 'true' and just re-fetch in TodoDetailScreen.
+      // I will implement _refreshTodo using ApiClient for now to be quick, or better, update TodoService.
+      // I'll update TodoService first.
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Lỗi: $e'), backgroundColor: AppColors.error),
-      );
-    }
-  }
-
-  Future<void> _deleteTodo() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Xác nhận xóa'),
-        content: const Text('Bạn có chắc muốn xóa công việc này?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Hủy'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Xóa'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      try {
-        final db = await AppDatabase().database;
-        await db.update(
-          'todos',
-          {
-            'is_deleted': 1,
-            'updated_at': DateTime.now().toIso8601String(),
-            'is_synced': 0,
-          },
-          where: 'client_id = ?',
-          whereArgs: [_todo.clientId],
-        );
-
-        if (mounted) {
-          Navigator.pop(context, true);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Đã xóa công việc')));
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Lỗi khi xóa: $e'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      print('Error refreshing todo: $e');
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Chi Tiết Công Việc'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => TodoFormScreen(todo: _todo)),
-              );
-              if (result == true && mounted) {
-                Navigator.pop(context, true);
-              }
-            },
+    return PopScope(
+      canPop: false,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        Navigator.pop(context, _hasChanged);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Chi tiết công việc"),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => Navigator.pop(context, _hasChanged),
           ),
-          IconButton(icon: const Icon(Icons.delete), onPressed: _deleteTodo),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Status Card
-          Card(
-            color: _todo.isCompleted
-                ? AppColors.success.withValues(alpha: 0.1)
-                : null,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Icon(
-                    _todo.isCompleted
-                        ? Icons.check_circle
-                        : Icons.radio_button_unchecked,
-                    color: _todo.isCompleted ? AppColors.success : Colors.grey,
-                    size: 32,
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _todo.isCompleted
-                              ? 'Đã hoàn thành'
-                              : 'Chưa hoàn thành',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                color: _todo.isCompleted
-                                    ? AppColors.success
-                                    : Colors.grey,
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        if (_todo.isCompleted)
-                          Text(
-                            'Hoàn thành vào ${DateFormat('dd/MM/yyyy').format(_todo.updatedAt)}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                      ],
-                    ),
-                  ),
-                  Switch(
-                    value: _todo.isCompleted,
-                    onChanged: (_) => _toggleComplete(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Title
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () async {
+                final result = await Navigator.push(context, MaterialPageRoute(
+                  builder: (_) => TodoFormScreen(todo: _todo, prefs: widget.prefs)
+                ));
+                
+                if (result == true) {
+                  setState(() => _hasChanged = true);
+                  // Fetch updated todo
+                  try {
+                     // Temporary direct API call until Service is updated
+                     final client = ApiClient(widget.prefs);
+                     final response = await client.get('/api/todos/${_todo.id}');
+                     if (response.data['success'] == true) {
+                       setState(() {
+                         _todo = Todo.fromJson(response.data['data']);
+                       });
+                     }
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Lỗi cập nhật: $e')),
+                    );
+                  }
+                }
+              },
+            )
+          ],
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_todo.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.title, size: 20),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Tiêu đề',
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                    ],
+                  Chip(
+                    label: Text(
+                      _todo.priority == 'high' ? 'Cao' : (_todo.priority == 'medium' ? 'Trung bình' : 'Thấp'),
+                      style: TextStyle(color: _todo.priority == 'high' ? Colors.white : Colors.black87),
+                    ),
+                    backgroundColor: _todo.priority == 'high' 
+                        ? Colors.red 
+                        : (_todo.priority == 'medium' ? Colors.orange.shade100 : Colors.grey.shade200),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _todo.title,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 12.0),
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            if (_todo.dueDate != null)
+                              TextSpan(
+                                text: "Hạn: ${_todo.dueDate!.day}/${_todo.dueDate!.month}/${_todo.dueDate!.year} ${_todo.dueDate!.hour}:${_todo.dueDate!.minute.toString().padLeft(2, '0')}",
+                                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                              ),
+                            if (_todo.dueDate != null && _todo.reminderTime != null)
+                              const TextSpan(text: " • ", style: TextStyle(color: Colors.grey)),
+                            if (_todo.reminderTime != null)
+                              TextSpan(
+                                text: "Nhắc nhở: ${_todo.reminderTime!.day}/${_todo.reminderTime!.month}/${_todo.reminderTime!.year} ${_todo.reminderTime!.hour}:${_todo.reminderTime!.minute.toString().padLeft(2, '0')}",
+                                style: const TextStyle(color: Colors.grey, fontSize: 14),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
+              const Divider(),
+              const SizedBox(height: 10),
+              Text(_todo.description ?? "Không có mô tả", style: const TextStyle(fontSize: 16)),
+            ],
           ),
-
-          // Description
-          if (_todo.description != null && _todo.description!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.description, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Mô tả',
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _todo.description!,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 8),
-
-          // Priority
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.flag),
-              title: const Text('Độ ưu tiên'),
-              trailing: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: _getPriorityColor(
-                    _todo.priority,
-                  ).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  _getPriorityLabel(_todo.priority),
-                  style: TextStyle(
-                    color: _getPriorityColor(_todo.priority),
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Tags
-          if (_todo.tags.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.local_offer, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Tags',
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _todo.tags
-                          .map(
-                            (tag) => Chip(
-                              label: Text(tag),
-                              backgroundColor: AppColors.primary.withValues(
-                                alpha: 0.1,
-                              ),
-                              labelStyle: TextStyle(color: AppColors.primary),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-
-          // Due Date
-          if (_todo.dueDate != null) ...[
-            const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.calendar_today),
-                title: const Text('Ngày hạn'),
-                subtitle: Text(
-                  DateFormat(
-                    'EEEE, dd/MM/yyyy',
-                    'vi_VN',
-                  ).format(_todo.dueDate!),
-                ),
-              ),
-            ),
-          ],
-
-          // Reminder
-          if (_todo.reminderTime != null) ...[
-            const SizedBox(height: 8),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.notifications),
-                title: const Text('Nhắc nhở'),
-                subtitle: Text(
-                  DateFormat('dd/MM/yyyy HH:mm').format(_todo.reminderTime!),
-                ),
-              ),
-            ),
-          ],
-
-          const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 8),
-
-          // Metadata
-          Text(
-            'Thông tin khác',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-
-          Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.add_circle_outline, size: 20),
-                  title: const Text('Ngày tạo'),
-                  subtitle: Text(
-                    DateFormat('dd/MM/yyyy HH:mm').format(_todo.createdAt),
-                  ),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.update, size: 20),
-                  title: const Text('Cập nhật lần cuối'),
-                  subtitle: Text(
-                    DateFormat('dd/MM/yyyy HH:mm').format(_todo.updatedAt),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _toggleComplete,
-        icon: Icon(_todo.isCompleted ? Icons.replay : Icons.check),
-        label: Text(_todo.isCompleted ? 'Đánh dấu chưa xong' : 'Hoàn thành'),
-        backgroundColor: _todo.isCompleted ? Colors.grey : AppColors.success,
-        foregroundColor: Colors.white,
+        ),
       ),
     );
   }
