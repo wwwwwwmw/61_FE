@@ -1,356 +1,315 @@
-
 import 'dart:async';
-import '../../core/database/app_database.dart';
-import '../../core/network/api_client.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../core/constants/app_constants.dart';
+import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite/sqflite.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/network/api_client.dart';
+import '../database/app_database.dart';
 
 class SyncService {
-  final AppDatabase _database;
   final ApiClient _apiClient;
   final SharedPreferences _prefs;
   
-  Timer? _syncTimer;
-  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
-  bool _isSyncing = false;
+  // Singleton pattern
+  static final SyncService _instance = SyncService._internal();
   
-  SyncService(this._database, this._apiClient, this._prefs) {
-    _initConnectivityListener();
-    _startPeriodicSync();
+  factory SyncService({ApiClient? apiClient, SharedPreferences? prefs}) {
+    if (apiClient != null) _instance._apiClientInternal = apiClient;
+    if (prefs != null) _instance._prefsInternal = prefs;
+    return _instance;
   }
   
-  // Initialize connectivity listener(Check network status automatically
-  void _initConnectivityListener() {
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((result) {
+  ApiClient? _apiClientInternal;
+  SharedPreferences? _prefsInternal;
+  
+  // Getters để đảm bảo không null khi dùng singleton
+  ApiClient get client => _apiClientInternal ?? ApiClient();
+  SharedPreferences get prefs => _prefsInternal!; // Cần đảm bảo prefs đã init ở main
+
+  SyncService._internal() : _apiClient = ApiClient(), _prefs =  throw UnimplementedError("Init via factory first"); 
+  // Lưu ý: Trong thực tế, bạn nên khởi tạo SyncService ở main hoặc dùng GetIt để inject dependency.
+  // Để đơn giản cho code này, ta giả định ApiClient và SharedPreferences được truyền vào.
+
+  Timer? _syncTimer;
+  bool _isSyncing = false;
+
+  // Hàm khởi động service (gọi ở main hoặc home)
+  void startSyncService() {
+    // 1. Lắng nghe sự kiện có mạng
+    Connectivity().onConnectivityChanged.listen((result) {
       if (result != ConnectivityResult.none) {
-        // Network is back, trigger sync
+        print("📶 Có mạng trở lại - Kích hoạt Sync");
         syncAll();
       }
     });
-  }
-  
-  // Start periodic sync every 5 minutes when online
-  void _startPeriodicSync() {
-    _syncTimer = Timer.periodic(AppConstants.syncInterval, (timer) {
+
+    // 2. Chạy định kỳ (ví dụ 5 phút 1 lần)
+    _syncTimer = Timer.periodic(AppConstants.syncInterval, (_) {
       syncAll();
     });
   }
-  
-  // Main sync function - syncs all data types
-  Future<bool> syncAll() async {
-    if (_isSyncing) return false;
-    
+
+  void stopSyncService() {
+    _syncTimer?.cancel();
+  }
+
+  // --- MAIN SYNC FUNCTION ---
+  Future<void> syncAll() async {
+    if (_isSyncing) return;
+
+    // Kiểm tra mạng trước khi chạy
+    final connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult == ConnectivityResult.none) {
+      print("📴 Không có mạng - Bỏ qua Sync");
+      return;
+    }
+
+    _isSyncing = true;
+    print("🔄 Bắt đầu đồng bộ dữ liệu...");
+
     try {
-      _isSyncing = true;
-      
-      // Check network connectivity
-      final connectivityResult = await Connectivity().checkConnectivity();
-      if (connectivityResult == ConnectivityResult.none) {
-        print('📴 No internet connection, skipping sync');
-        return false;
+      // Init Database nếu chưa có
+      final db = await AppDatabase().database;
+
+      // 1. Sync từng phần
+      await _syncTodos(db);
+      await _syncExpenses(db);
+      await _syncEvents(db);
+
+      // 2. Cập nhật thời gian sync cuối cùng
+      if (_prefsInternal != null) {
+        await _prefsInternal!.setString(AppConstants.lastSyncKey, DateTime.now().toIso8601String());
       }
       
-      print('🔄 Starting sync...');
-      
-      // Sync todos
-      await _syncTodos();
-      
-      // Sync expenses
-      await _syncExpenses();
-      
-      // Sync events
-      await _syncEvents();
-      
-      // Update last sync time
-      await _prefs.setString(
-        AppConstants.lastSyncKey,
-        DateTime.now().toIso8601String(),
-      );
-      
-      print('✅ Sync completed successfully');
-      return true;
+      print("✅ Đồng bộ hoàn tất thành công!");
     } catch (e) {
-      print('❌ Sync error: $e');
-      return false;
+      print("❌ Lỗi trong quá trình đồng bộ: $e");
     } finally {
       _isSyncing = false;
     }
   }
-  
-  // Sync todos
-  Future<void> _syncTodos() async {
+
+  // --- 1. SYNC TODOS ---
+  Future<void> _syncTodos(Database db) async {
     try {
-      final db = await _database.database;
+      // A. ĐẨY LÊN SERVER (PUSH)
+      // Lấy các todo chưa sync (is_synced = 0)
+      final unsynced = await db.query('todos', where: 'is_synced = 0');
       
-      // Get unsync todos from local database
-      final unsynced = await db.query(
-        'todos',
-        where: 'is_synced = ? AND is_deleted = ?',
-        whereArgs: [0, 0],
-      );
-      
-      // Upload unsynced todos to server
       for (var todo in unsynced) {
-        try {
-          if (todo['id'] == null || todo['id'] == 0) {
-            // Create new todo on server
-            final response = await _apiClient.post(
-              AppConstants.todosEndpoint,
-              data: {
-                'title': todo['title'],
-                'description': todo['description'],
-                'is_completed': todo['is_completed'] == 1,
-                'category_id': todo['category_id'],
-                'priority': todo['priority'],
-                'tags': (todo['tags'] as String).split(',').where((t) => t.isNotEmpty).toList(),
-                'due_date': todo['due_date'],
-                'reminder_time': todo['reminder_time'],
-                'client_id': todo['client_id'],
-              },
-            );
-            
-            if (response.data['success']) {
-              // Update local record with server ID
-              await db.update(
-                'todos',
-                {
-                  'id': response.data['data']['id'],
-                  'is_synced': 1,
-                  'version': response.data['data']['version'],
-                },
-                where: 'client_id = ?',
-                whereArgs: [todo['client_id']],
-              );
-            }
-          } else {
-            // Update existing todo on server
-            final response = await _apiClient.put(
-              '${AppConstants.todosEndpoint}/${todo['id']}',
-              data: {
-                'title': todo['title'],
-                'description': todo['description'],
-                'is_completed': todo['is_completed'] == 1,
-                'category_id': todo['category_id'],
-                'priority': todo['priority'],
-                'tags': (todo['tags'] as String).split(',').where((t) => t.isNotEmpty).toList(),
-                'due_date': todo['due_date'],
-                'reminder_time': todo['reminder_time'],
-              },
-            );
-            
-            if (response.data['success']) {
-              await db.update(
-                'todos',
-                {'is_synced': 1, 'version': response.data['data']['version']},
-                where: 'id = ?',
-                whereArgs: [todo['id']],
-              );
-            }
-          }
-        } catch (e) {
-          print('Error syncing todo ${todo['client_id']}: $e');
-        }
-      }
-      
-      // Get server changes
-      final lastSync = _prefs.getString(AppConstants.lastSyncKey) ?? '1970-01-01T00:00:00Z';
-      final response = await _apiClient.post(
-        '${AppConstants.todosEndpoint}/sync',
-        data: {
-          'todos': [],
-          'lastSyncTime': lastSync,
-        },
-      );
-      
-      if (response.data['success']) {
-        // Apply server changes to local database
-        final serverChanges = response.data['data']['serverChanges'] as List;
-        for (var serverTodo in serverChanges) {
-          await db.insert(
-            'todos',
-            {
-              'id': serverTodo['id'],
-              'client_id': serverTodo['client_id'],
-              'title': serverTodo['title'],
-              'description': serverTodo['description'],
-              'is_completed': serverTodo['is_completed'] ? 1 : 0,
-              'category_id': serverTodo['category_id'],
-              'priority': serverTodo['priority'],
-              'tags': (serverTodo['tags'] as List).join(','),
-              'due_date': serverTodo['due_date'],
-              'reminder_time': serverTodo['reminder_time'],
-              'position': serverTodo['position'] ?? 0,
-              'created_at': serverTodo['created_at'],
-              'updated_at': serverTodo['updated_at'],
-              'is_deleted': serverTodo['is_deleted'] ? 1 : 0,
+        final isNew = todo['id'] == null; // Chưa có ID server => Tạo mới
+        
+        // Chuẩn bị data (Convert tags từ chuỗi sang mảng cho server)
+        final tagsString = todo['tags'] as String?;
+        final List<String> tagsList = tagsString != null && tagsString.isNotEmpty 
+            ? tagsString.split(',') 
+            : [];
+
+        final data = {
+          'title': todo['title'],
+          'description': todo['description'],
+          'is_completed': todo['is_completed'] == 1,
+          'category_id': todo['category_id'],
+          'priority': todo['priority'],
+          'tags': tagsList,
+          'due_date': todo['due_date'],
+          'reminder_time': todo['reminder_time'],
+          'client_id': todo['client_id'], // Quan trọng để map lại
+        };
+
+        if (isNew) {
+          // POST
+          final res = await client.post(AppConstants.todosEndpoint, data: data);
+          if (res.data['success']) {
+            // Cập nhật lại ID server và đánh dấu đã sync
+            await db.update('todos', {
+              'id': res.data['data']['id'],
               'is_synced': 1,
-              'version': serverTodo['version'],
-            },
-            conflictAlgorithm: ConflictAlgorithm.replace,
-          );
+              'version': res.data['data']['version']
+            }, where: 'client_id = ?', whereArgs: [todo['client_id']]);
+          }
+        } else {
+          // PUT (Update)
+          final res = await client.put('${AppConstants.todosEndpoint}/${todo['id']}', data: data);
+          if (res.data['success']) {
+            await db.update('todos', {
+              'is_synced': 1,
+              'version': res.data['data']['version']
+            }, where: 'id = ?', whereArgs: [todo['id']]);
+          }
         }
       }
+
+      // B. KÉO VỀ MÁY (PULL)
+      // Gọi API sync của server để lấy các thay đổi mới nhất
+      final lastSyncTime = _prefsInternal?.getString(AppConstants.lastSyncKey) ?? "1970-01-01T00:00:00Z";
       
-      print('✅ Todos synced');
+      final syncRes = await client.post('${AppConstants.todosEndpoint}/sync', data: {
+        'todos': [], // Có thể gửi list conflict nếu cần
+        'lastSyncTime': lastSyncTime
+      });
+
+      if (syncRes.data['success']) {
+        final serverChanges = syncRes.data['data']['serverChanges'] as List;
+        
+        for (var serverTodo in serverChanges) {
+          // Insert hoặc Replace vào local DB
+          await db.insert('todos', {
+            'id': serverTodo['id'],
+            'client_id': serverTodo['client_id'] ?? serverTodo['id'].toString(), // Fallback
+            'title': serverTodo['title'],
+            'description': serverTodo['description'],
+            'is_completed': serverTodo['is_completed'] == true ? 1 : 0,
+            'category_id': serverTodo['category_id'],
+            'priority': serverTodo['priority'],
+            'tags': (serverTodo['tags'] as List?)?.join(',') ?? "", // Server trả về mảng -> lưu chuỗi
+            'due_date': serverTodo['due_date'],
+            'reminder_time': serverTodo['reminder_time'],
+            'is_deleted': serverTodo['is_deleted'] == true ? 1 : 0,
+            'is_synced': 1, // Dữ liệu từ server về mặc định là đã sync
+            'version': serverTodo['version'] ?? 1,
+            'updated_at': serverTodo['updated_at']
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
+
     } catch (e) {
-      print('❌ Todos sync error: $e');
+      print("Error syncing todos: $e");
     }
   }
-  
-  // Sync expenses
-  Future<void> _syncExpenses() async {
+
+  // --- 2. SYNC EXPENSES ---
+  Future<void> _syncExpenses(Database db) async {
     try {
-      final db = await _database.database;
-      
-      final unsynced = await db.query(
-        'expenses',
-        where: 'is_synced = ? AND is_deleted = ?',
-        whereArgs: [0, 0],
-      );
+      // A. PUSH
+      final unsynced = await db.query('expenses', where: 'is_synced = 0');
       
       for (var expense in unsynced) {
-        try {
-          if (expense['id'] == null || expense['id'] == 0) {
-            final response = await _apiClient.post(
-              AppConstants.expensesEndpoint,
-              data: {
-                'amount': expense['amount'],
-                'type': expense['type'],
-                'category_id': expense['category_id'],
-                'description': expense['description'],
-                'date': expense['date'],
-                'payment_method': expense['payment_method'],
-                'client_id': expense['client_id'],
-              },
-            );
-            
-            if (response.data['success']) {
-              await db.update(
-                'expenses',
-                {
-                  'id': response.data['data']['id'],
-                  'is_synced': 1,
-                  'version': response.data['data']['version'],
-                },
-                where: 'client_id = ?',
-                whereArgs: [expense['client_id']],
-              );
-            }
-          } else {
-            final response = await _apiClient.put(
-              '${AppConstants.expensesEndpoint}/${expense['id']}',
-              data: {
-                'amount': expense['amount'],
-                'type': expense['type'],
-                'category_id': expense['category_id'],
-                'description': expense['description'],
-                'date': expense['date'],
-                'payment_method': expense['payment_method'],
-              },
-            );
-            
-            if (response.data['success']) {
-              await db.update(
-                'expenses',
-                {'is_synced': 1},
-                where: 'id = ?',
-                whereArgs: [expense['id']],
-              );
-            }
+        final isNew = expense['id'] == null;
+        final data = {
+          'amount': expense['amount'],
+          'type': expense['type'],
+          'category_id': expense['category_id'],
+          'description': expense['description'],
+          'date': expense['date'],
+          'payment_method': expense['payment_method'],
+          'client_id': expense['client_id']
+        };
+
+        if (isNew) {
+          final res = await client.post(AppConstants.expensesEndpoint, data: data);
+          if (res.data['success']) {
+            await db.update('expenses', {
+              'id': res.data['data']['id'],
+              'is_synced': 1,
+              'version': res.data['data']['version']
+            }, where: 'client_id = ?', whereArgs: [expense['client_id']]);
           }
-        } catch (e) {
-          print('Error syncing expense: $e');
+        } else {
+          final res = await client.put('${AppConstants.expensesEndpoint}/${expense['id']}', data: data);
+          if (res.data['success']) {
+            await db.update('expenses', {'is_synced': 1}, where: 'id = ?', whereArgs: [expense['id']]);
+          }
         }
       }
-      
-      print('✅ Expenses synced');
+
+      // B. PULL
+      final lastSyncTime = _prefsInternal?.getString(AppConstants.lastSyncKey) ?? "1970-01-01T00:00:00Z";
+      final syncRes = await client.post('${AppConstants.expensesEndpoint}/sync', data: {
+        'expenses': [],
+        'lastSyncTime': lastSyncTime
+      });
+
+      if (syncRes.data['success']) {
+        final serverChanges = syncRes.data['data']['serverChanges'] as List;
+        for (var item in serverChanges) {
+          await db.insert('expenses', {
+            'id': item['id'],
+            'client_id': item['client_id'] ?? item['id'].toString(),
+            'amount': item['amount'],
+            'type': item['type'],
+            'category_id': item['category_id'],
+            'description': item['description'],
+            'date': item['date'],
+            'payment_method': item['payment_method'],
+            'is_deleted': item['is_deleted'] == true ? 1 : 0,
+            'is_synced': 1,
+            'version': item['version'] ?? 1,
+            'updated_at': item['updated_at']
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
     } catch (e) {
-      print('❌ Expenses sync error: $e');
+      print("Error syncing expenses: $e");
     }
   }
-  
-  // Sync events
-  Future<void> _syncEvents() async {
+
+  // --- 3. SYNC EVENTS ---
+  Future<void> _syncEvents(Database db) async {
     try {
-      final db = await _database.database;
-      
-      final unsynced = await db.query(
-        'events',
-        where: 'is_synced = ? AND is_deleted = ?',
-        whereArgs: [0, 0],
-      );
+      // A. PUSH
+      final unsynced = await db.query('events', where: 'is_synced = 0');
       
       for (var event in unsynced) {
-        try {
-          if (event['id'] == null || event['id'] == 0) {
-            final response = await _apiClient.post(
-              AppConstants.eventsEndpoint,
-              data: {
-                'title': event['title'],
-                'description': event['description'],
-                'event_date': event['event_date'],
-                'event_type': event['event_type'],
-                'color': event['color'],
-                'icon': event['icon'],
-                'is_recurring': event['is_recurring'] == 1,
-                'recurrence_pattern': event['recurrence_pattern'],
-                'notification_enabled': event['notification_enabled'] == 1,
-                'client_id': event['client_id'],
-              },
-            );
-            
-            if (response.data['success']) {
-              await db.update(
-                'events',
-                {
-                  'id': response.data['data']['id'],
-                  'is_synced': 1,
-                  'version': response.data['data']['version'],
-                },
-                where: 'client_id = ?',
-                whereArgs: [event['client_id']],
-              );
-            }
-          } else {
-            final response = await _apiClient.put(
-              '${AppConstants.eventsEndpoint}/${event['id']}',
-              data: {
-                'title': event['title'],
-                'description': event['description'],
-                'event_date': event['event_date'],
-                'event_type': event['event_type'],
-                'color': event['color'],
-                'icon': event['icon'],
-                'is_recurring': event['is_recurring'] == 1,
-                'recurrence_pattern': event['recurrence_pattern'],
-                'notification_enabled': event['notification_enabled'] == 1,
-              },
-            );
-            
-            if (response.data['success']) {
-              await db.update(
-                'events',
-                {'is_synced': 1},
-                where: 'id = ?',
-                whereArgs: [event['id']],
-              );
-            }
+        final isNew = event['id'] == null;
+        final data = {
+          'title': event['title'],
+          'description': event['description'],
+          'event_date': event['event_date'],
+          'event_type': event['event_type'],
+          'color': event['color'],
+          'is_recurring': event['is_recurring'] == 1,
+          'notification_enabled': event['notification_enabled'] == 1,
+          'client_id': event['client_id']
+        };
+
+        if (isNew) {
+          final res = await client.post(AppConstants.eventsEndpoint, data: data);
+          if (res.data['success']) {
+            await db.update('events', {
+              'id': res.data['data']['id'],
+              'is_synced': 1,
+              'version': res.data['data']['version']
+            }, where: 'client_id = ?', whereArgs: [event['client_id']]);
           }
-        } catch (e) {
-          print('Error syncing event: $e');
+        } else {
+          final res = await client.put('${AppConstants.eventsEndpoint}/${event['id']}', data: data);
+          if (res.data['success']) {
+            await db.update('events', {'is_synced': 1}, where: 'id = ?', whereArgs: [event['id']]);
+          }
         }
       }
-      
-      print('✅ Events synced');
+
+      // B. PULL
+      final lastSyncTime = _prefsInternal?.getString(AppConstants.lastSyncKey) ?? "1970-01-01T00:00:00Z";
+      final syncRes = await client.post('${AppConstants.eventsEndpoint}/sync', data: {
+        'events': [],
+        'lastSyncTime': lastSyncTime
+      });
+
+      if (syncRes.data['success']) {
+        final serverChanges = syncRes.data['data']['serverChanges'] as List;
+        for (var item in serverChanges) {
+          await db.insert('events', {
+            'id': item['id'],
+            'client_id': item['client_id'] ?? item['id'].toString(),
+            'title': item['title'],
+            'description': item['description'],
+            'event_date': item['event_date'],
+            'event_type': item['event_type'],
+            'color': item['color'],
+            'is_recurring': item['is_recurring'] == true ? 1 : 0,
+            'notification_enabled': item['notification_enabled'] == true ? 1 : 0,
+            'is_deleted': item['is_deleted'] == true ? 1 : 0,
+            'is_synced': 1,
+            'version': item['version'] ?? 1,
+            'updated_at': item['updated_at']
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      }
     } catch (e) {
-      print('❌ Events sync error: $e');
+      print("Error syncing events: $e");
     }
-  }
-  
-  // Dispose resources
-  void dispose() {
-    _syncTimer?.cancel();
-    _connectivitySubscription?.cancel();
   }
 }
