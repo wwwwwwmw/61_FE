@@ -1,159 +1,148 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import '../../core/network/api_client.dart';
-import '../../core/services/todo_service.dart';
-import '../../features/todo/domain/entities/todo.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/theme/app_colors.dart';
 import 'todo_form_screen.dart';
 
 class TodoDetailScreen extends StatefulWidget {
-  final Todo todo;
   final SharedPreferences prefs;
-  
-  const TodoDetailScreen({super.key, required this.todo, required this.prefs});
+  final int todoId;
+
+  const TodoDetailScreen({super.key, required this.prefs, required this.todoId});
 
   @override
   State<TodoDetailScreen> createState() => _TodoDetailScreenState();
 }
 
 class _TodoDetailScreenState extends State<TodoDetailScreen> {
-  late Todo _todo;
-  late final TodoService _todoService;
-  bool _hasChanged = false;
+  Map<String, dynamic>? _todo;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _todo = widget.todo;
-    _todoService = TodoService(ApiClient(widget.prefs));
+    _fetchDetail();
   }
 
-  Future<void> _refreshTodo() async {
+  Future<void> _fetchDetail() async {
     try {
-      if (_todo.id == null) return;
-      // We need a getTodoById method in TodoService, or just use getTodos with filter?
-      // TodoService has getTodos, but not getTodoById exposed directly in the interface I saw earlier?
-      // Let's check TodoService again. It has getTodos.
-      // Wait, I saw getTodos, create, update, delete. I didn't see getById in the file content I viewed in step 690.
-      // I will check backend routes. GET /api/todos/:id exists.
-      // I should add getTodoById to TodoService if it's missing, or just use getTodos and filter?
-      // Actually, looking at step 690, TodoService DOES NOT have getTodoById.
-      // I should add it to TodoService first? Or just implement it here using ApiClient directly?
-      // Better to add it to TodoService.
-      // For now, to avoid context switching, I'll use ApiClient directly or add it to TodoService.
-      // I'll add it to TodoService in a separate step. For now, let's assume I'll add it.
-      // Wait, I can't assume. I should check if I can just pass the updated object from TodoFormScreen?
-      // TodoFormScreen currently returns 'true'. Changing it to return 'Todo' object is cleaner but requires changing TodoFormScreen.
-      // Changing TodoFormScreen is easy.
-      // Let's modify TodoFormScreen to return the updated Todo object instead of just true?
-      // No, TodoFormScreen re-fetches or just sends data? It sends data. It doesn't get the full object back from updateTodo?
-      // updateTodo returns Map<String, dynamic>. So yes, it gets the data.
-      // So TodoFormScreen COULD return the new Todo object.
-      // But TodoListScreen expects 'true'.
-      // I'll stick to 'true' and just re-fetch in TodoDetailScreen.
-      // I will implement _refreshTodo using ApiClient for now to be quick, or better, update TodoService.
-      // I'll update TodoService first.
+      final client = ApiClient(widget.prefs);
+      final res = await client.get('${AppConstants.todosEndpoint}/${widget.todoId}');
+      if (res.data['success']) {
+        setState(() {
+          _todo = res.data['data'];
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      print('Error refreshing todo: $e');
+      if(mounted) Navigator.pop(context); // Lỗi thì thoát ra
+    }
+  }
+
+  Future<void> _deleteTodo() async {
+    final confirm = await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa công việc'),
+        content: const Text('Hành động này không thể hoàn tác?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Xóa', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final client = ApiClient(widget.prefs);
+        await client.delete('${AppConstants.todosEndpoint}/${widget.todoId}');
+        if(mounted) Navigator.pop(context, true); // Trả về true để màn hình trước reload
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) {
-        if (didPop) return;
-        Navigator.pop(context, _hasChanged);
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text("Chi tiết công việc"),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context, _hasChanged),
+    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_todo == null) return const Scaffold(body: Center(child: Text("Không tìm thấy dữ liệu")));
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Chi tiết công việc'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            onPressed: () async {
+              // Chuyển sang màn hình sửa
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => TodoFormScreen(
+                    prefs: widget.prefs,
+                    todo: _todo, // Truyền dữ liệu hiện tại sang để sửa
+                  ),
+                ),
+              );
+              if (result == true) _fetchDetail(); // Reload lại chi tiết sau khi sửa
+            },
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.edit),
-              onPressed: () async {
-                final result = await Navigator.push(context, MaterialPageRoute(
-                  builder: (_) => TodoFormScreen(todo: _todo, prefs: widget.prefs)
-                ));
-                
-                if (result == true) {
-                  setState(() => _hasChanged = true);
-                  // Fetch updated todo
-                  try {
-                     // Temporary direct API call until Service is updated
-                     final client = ApiClient(widget.prefs);
-                     final response = await client.get('/api/todos/${_todo.id}');
-                     if (response.data['success'] == true) {
-                       setState(() {
-                         _todo = Todo.fromJson(response.data['data']);
-                       });
-                     }
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Lỗi cập nhật: $e')),
-                    );
-                  }
-                }
-              },
-            )
+          IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: _deleteTodo,
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _todo!['title'],
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildInfoRow(Icons.description, 'Mô tả', _todo!['description'] ?? 'Không có mô tả'),
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.flag, 'Độ ưu tiên', _todo!['priority'].toString().toUpperCase()),
+            const SizedBox(height: 12),
+            if (_todo!['due_date'] != null)
+              _buildInfoRow(Icons.calendar_today, 'Hạn chót', 
+                DateFormat('dd/MM/yyyy HH:mm').format(DateTime.parse(_todo!['due_date']).toLocal())),
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.category, 'Danh mục ID', _todo!['category_id'].toString()),
+            const SizedBox(height: 12),
+            _buildInfoRow(Icons.info_outline, 'Trạng thái', _todo!['is_completed'] ? 'Đã xong' : 'Đang thực hiện'),
           ],
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16.0),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: Colors.grey),
+        const SizedBox(width: 8),
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_todo.title, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Chip(
-                    label: Text(
-                      _todo.priority == 'high' ? 'Cao' : (_todo.priority == 'medium' ? 'Trung bình' : 'Thấp'),
-                      style: TextStyle(color: _todo.priority == 'high' ? Colors.white : Colors.black87),
-                    ),
-                    backgroundColor: _todo.priority == 'high' 
-                        ? Colors.red 
-                        : (_todo.priority == 'medium' ? Colors.orange.shade100 : Colors.grey.shade200),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 12.0),
-                      child: Text.rich(
-                        TextSpan(
-                          children: [
-                            if (_todo.dueDate != null)
-                              TextSpan(
-                                text: "Hạn: ${_todo.dueDate!.day}/${_todo.dueDate!.month}/${_todo.dueDate!.year} ${_todo.dueDate!.hour}:${_todo.dueDate!.minute.toString().padLeft(2, '0')}",
-                                style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
-                              ),
-                            if (_todo.dueDate != null && _todo.reminderTime != null)
-                              const TextSpan(text: " • ", style: TextStyle(color: Colors.grey)),
-                            if (_todo.reminderTime != null)
-                              TextSpan(
-                                text: "Nhắc nhở: ${_todo.reminderTime!.day}/${_todo.reminderTime!.month}/${_todo.reminderTime!.year} ${_todo.reminderTime!.hour}:${_todo.reminderTime!.minute.toString().padLeft(2, '0')}",
-                                style: const TextStyle(color: Colors.grey, fontSize: 14),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const Divider(),
-              const SizedBox(height: 10),
-              Text(_todo.description ?? "Không có mô tả", style: const TextStyle(fontSize: 16)),
+              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              const SizedBox(height: 4),
+              Text(value, style: const TextStyle(fontSize: 16)),
             ],
           ),
         ),
-      ),
+      ],
     );
   }
 }

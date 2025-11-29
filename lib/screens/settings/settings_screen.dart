@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../auth/login_screen.dart';
+import '../categories/category_list_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   final SharedPreferences prefs;
@@ -66,6 +67,19 @@ class SettingsScreen extends StatelessWidget {
               value: Theme.of(context).brightness == Brightness.dark,
               onChanged: (_) => onThemeToggle(),
             ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.category_outlined),
+            title: const Text('Quản lý Danh mục'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CategoryListScreen(prefs: widget.prefs),
+                ),
+              );
+            },
           ),
           const Divider(),
           ListTile(
