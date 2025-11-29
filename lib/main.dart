@@ -4,20 +4,31 @@ import 'core/theme/app_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'core/services/sync_service.dart';
+import 'core/services/socket_service.dart';
+import 'core/services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize date formatting
   await initializeDateFormatting('vi_VN', null);
   
   final prefs = await SharedPreferences.getInstance();
+
+  // 1. Khởi tạo Sync Service
+  SyncService().initialize(prefs);
+  SyncService().startSyncService();
+
+  // 2. Khởi tạo Notification Service
+  await NotificationService().initialize();
+
+  // 3. Kết nối Socket
+  SocketService().connect();
+
   runApp(MyApp(prefs: prefs));
 }
 
 class MyApp extends StatefulWidget {
   final SharedPreferences prefs;
-  
   const MyApp({super.key, required this.prefs});
 
   @override
