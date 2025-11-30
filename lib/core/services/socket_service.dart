@@ -45,7 +45,7 @@ class SocketService with ChangeNotifier {
         NotificationService().showNotification(
           id: data['id'] ?? 0,
           title: "⏰ Nhắc nhở công việc",
-          body: data['title'] ?? "Bạn có công việc sắp đến hạn!",
+          body: data['message'] ?? "Bạn có công việc sắp đến hạn!",
         );
       }
     });
@@ -55,7 +55,7 @@ class SocketService with ChangeNotifier {
       if (data is Map) {
         NotificationService().showNotification(
           id: (data['id'] ?? 0) + 1000, // ID khác todo để không bị đè
-          title: "🎉 Sự kiện diễn ra",
+          title: data['title'] ?? "🎉 Sự kiện diễn ra",
           body: data['message'] ?? "Sự kiện ${data['title']} đang diễn ra!",
         );
       }
