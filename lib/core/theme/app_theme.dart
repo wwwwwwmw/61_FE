@@ -19,7 +19,7 @@ class AppTheme {
       onSurface: AppColors.textPrimaryLight,
       onError: Colors.white,
     ),
-    
+
     // Text Theme
     textTheme: GoogleFonts.interTextTheme(
       const TextTheme(
@@ -70,7 +70,7 @@ class AppTheme {
         ),
       ),
     ),
-    
+
     // App Bar Theme
     appBarTheme: AppBarTheme(
       elevation: 0,
@@ -83,7 +83,7 @@ class AppTheme {
         color: AppColors.textPrimaryLight,
       ),
     ),
-    
+
     // Card Theme
     cardTheme: const CardThemeData(
       elevation: 2,
@@ -92,7 +92,7 @@ class AppTheme {
       ),
       color: AppColors.surfaceLight,
     ),
-    
+
     // Elevated Button Theme
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
@@ -107,7 +107,7 @@ class AppTheme {
         ),
       ),
     ),
-    
+
     // Input Decoration Theme
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -130,7 +130,7 @@ class AppTheme {
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     ),
-    
+
     // Floating Action Button Theme
     floatingActionButtonTheme: FloatingActionButtonThemeData(
       elevation: 4,
@@ -139,7 +139,7 @@ class AppTheme {
       ),
     ),
   );
-  
+
   // Dark Theme
   static ThemeData darkTheme = ThemeData(
     useMaterial3: true,
@@ -156,7 +156,7 @@ class AppTheme {
       onSurface: AppColors.textPrimaryDark,
       onError: Colors.white,
     ),
-    
+
     // Text Theme
     textTheme: GoogleFonts.interTextTheme(
       const TextTheme(
@@ -207,7 +207,7 @@ class AppTheme {
         ),
       ),
     ),
-    
+
     // App Bar Theme
     appBarTheme: AppBarTheme(
       elevation: 0,
@@ -220,7 +220,7 @@ class AppTheme {
         color: AppColors.textPrimaryDark,
       ),
     ),
-    
+
     // Card Theme
     cardTheme: const CardThemeData(
       elevation: 2,
@@ -229,7 +229,7 @@ class AppTheme {
       ),
       color: AppColors.surfaceDark,
     ),
-    
+
     // Elevated Button Theme
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
@@ -244,7 +244,7 @@ class AppTheme {
         ),
       ),
     ),
-    
+
     // Input Decoration Theme
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
@@ -267,7 +267,7 @@ class AppTheme {
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     ),
-    
+
     // Floating Action Button Theme
     floatingActionButtonTheme: FloatingActionButtonThemeData(
       elevation: 4,

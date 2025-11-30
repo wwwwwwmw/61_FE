@@ -5,7 +5,7 @@ import '../constants/app_constants.dart';
 class ApiClient {
   late final Dio _dio;
   final SharedPreferences _prefs;
-  
+
   ApiClient(this._prefs) {
     _dio = Dio(
       BaseOptions(
@@ -18,7 +18,7 @@ class ApiClient {
         },
       ),
     );
-    
+
     // Add interceptors
     _dio.interceptors.add(
       InterceptorsWrapper(
@@ -49,16 +49,16 @@ class ApiClient {
       ),
     );
   }
-  
+
   Future<void> _refreshToken() async {
     final refreshToken = _prefs.getString(AppConstants.refreshTokenKey);
     if (refreshToken == null) throw Exception('No refresh token');
-    
+
     final response = await _dio.post(
       '${AppConstants.authEndpoint}/refresh',
       data: {'refreshToken': refreshToken},
     );
-    
+
     if (response.data['success']) {
       await _prefs.setString(
         AppConstants.accessTokenKey,
@@ -66,29 +66,31 @@ class ApiClient {
       );
     }
   }
-  
+
   // Generic GET request
-  Future<Response> get(String path, {Map<String, dynamic>? queryParameters}) async {
+  Future<Response> get(String path,
+      {Map<String, dynamic>? queryParameters}) async {
     return await _dio.get(path, queryParameters: queryParameters);
   }
-  
+
   // Generic POST request
   Future<Response> post(String path, {dynamic data}) async {
     return await _dio.post(path, data: data);
   }
-  
+
   // Generic PUT request
   Future<Response> put(String path, {dynamic data}) async {
     return await _dio.put(path, data: data);
   }
-  
+
   // Generic PATCH request
   Future<Response> patch(String path, {dynamic data}) async {
     return await _dio.patch(path, data: data);
   }
-  
+
   // Generic DELETE request
-  Future<Response> delete(String path, {Map<String, dynamic>? queryParameters}) async {
+  Future<Response> delete(String path,
+      {Map<String, dynamic>? queryParameters}) async {
     return await _dio.delete(path, queryParameters: queryParameters);
   }
 }

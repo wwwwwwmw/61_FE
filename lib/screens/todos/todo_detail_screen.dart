@@ -11,7 +11,8 @@ class TodoDetailScreen extends StatefulWidget {
   final SharedPreferences prefs;
   final int todoId;
 
-  const TodoDetailScreen({super.key, required this.prefs, required this.todoId});
+  const TodoDetailScreen(
+      {super.key, required this.prefs, required this.todoId});
 
   @override
   State<TodoDetailScreen> createState() => _TodoDetailScreenState();
@@ -30,7 +31,8 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   Future<void> _fetchDetail() async {
     try {
       final client = ApiClient(widget.prefs);
-      final res = await client.get('${AppConstants.todosEndpoint}/${widget.todoId}');
+      final res =
+          await client.get('${AppConstants.todosEndpoint}/${widget.todoId}');
       if (res.data['success']) {
         setState(() {
           // [FIX] Parse JSON thành Todo object ngay khi lấy về
@@ -39,7 +41,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
         });
       }
     } catch (e) {
-      if(mounted) Navigator.pop(context); 
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -50,8 +52,12 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
         title: const Text('Xóa công việc'),
         content: const Text('Hành động này không thể hoàn tác?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Xóa', style: TextStyle(color: Colors.red))),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Hủy')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Xóa', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -60,17 +66,23 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       try {
         final client = ApiClient(widget.prefs);
         await client.delete('${AppConstants.todosEndpoint}/${widget.todoId}');
-        if(mounted) Navigator.pop(context, true); 
+        if (mounted) Navigator.pop(context, true);
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (_todo == null) return const Scaffold(body: Center(child: Text("Không tìm thấy dữ liệu")));
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_todo == null) {
+      return const Scaffold(
+          body: Center(child: Text("Không tìm thấy dữ liệu")));
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -84,11 +96,12 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                 MaterialPageRoute(
                   builder: (_) => TodoFormScreen(
                     prefs: widget.prefs,
-                    todo: _todo, // [OK] Giờ _todo đã là kiểu Todo, truyền sang Form OK
+                    todo:
+                        _todo, // [OK] Giờ _todo đã là kiểu Todo, truyền sang Form OK
                   ),
                 ),
               );
-              if (result == true) _fetchDetail(); 
+              if (result == true) _fetchDetail();
             },
           ),
           IconButton(
@@ -105,22 +118,24 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
             Text(
               _todo!.title,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: AppColors.primary
-              ),
+                  fontWeight: FontWeight.bold, color: AppColors.primary),
             ),
             const SizedBox(height: 16),
-            _buildInfoRow(Icons.description, 'Mô tả', _todo!.description ?? 'Không có mô tả'),
+            _buildInfoRow(Icons.description, 'Mô tả',
+                _todo!.description ?? 'Không có mô tả'),
             const SizedBox(height: 12),
-            _buildInfoRow(Icons.flag, 'Độ ưu tiên', _todo!.priority.toUpperCase()),
+            _buildInfoRow(
+                Icons.flag, 'Độ ưu tiên', _todo!.priority.toUpperCase()),
             const SizedBox(height: 12),
             if (_todo!.dueDate != null)
-              _buildInfoRow(Icons.calendar_today, 'Hạn chót', 
-                DateFormat('dd/MM/yyyy HH:mm').format(_todo!.dueDate!)),
+              _buildInfoRow(Icons.calendar_today, 'Hạn chót',
+                  DateFormat('dd/MM/yyyy HH:mm').format(_todo!.dueDate!)),
             const SizedBox(height: 12),
-            _buildInfoRow(Icons.category, 'Danh mục ID', _todo!.categoryId?.toString() ?? 'Chưa phân loại'),
+            _buildInfoRow(Icons.category, 'Danh mục ID',
+                _todo!.categoryId?.toString() ?? 'Chưa phân loại'),
             const SizedBox(height: 12),
-            _buildInfoRow(Icons.info_outline, 'Trạng thái', _todo!.isCompleted ? 'Đã xong' : 'Đang thực hiện'),
+            _buildInfoRow(Icons.info_outline, 'Trạng thái',
+                _todo!.isCompleted ? 'Đã xong' : 'Đang thực hiện'),
             const SizedBox(height: 12),
             // Hiển thị Tags
             Row(
@@ -130,11 +145,15 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                 Expanded(
                   child: Wrap(
                     spacing: 8,
-                    children: _todo!.tags.map((tag) => Chip(
-                      label: Text(tag),
-                      backgroundColor: AppColors.primary.withOpacity(0.1),
-                      labelStyle: TextStyle(color: AppColors.primary),
-                    )).toList(),
+                    children: _todo!.tags
+                        .map((tag) => Chip(
+                              label: Text(tag),
+                              backgroundColor:
+                                  AppColors.primary.withOpacity(0.1),
+                              labelStyle:
+                                  const TextStyle(color: AppColors.primary),
+                            ))
+                        .toList(),
                   ),
                 ),
               ],
@@ -155,7 +174,9 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+              Text(label,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, color: Colors.grey)),
               const SizedBox(height: 4),
               Text(value, style: const TextStyle(fontSize: 16)),
             ],

@@ -5,7 +5,8 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
   Future<void> initialize() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
@@ -18,16 +19,19 @@ class NotificationService {
             requestBadgePermission: true,
             requestSoundPermission: true);
 
-    const InitializationSettings initializationSettings = InitializationSettings(
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
       android: initializationSettingsAndroid,
       iOS: initializationSettingsDarwin,
     );
 
     await _notificationsPlugin.initialize(initializationSettings);
-    
+
     // [FIX] Yêu cầu quyền thông báo cho Android 13+
-    await _notificationsPlugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
+    await _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
   }
 
   Future<void> showNotification({

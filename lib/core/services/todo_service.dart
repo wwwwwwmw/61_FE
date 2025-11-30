@@ -64,7 +64,8 @@ class TodoService {
   }
 
   // Toggle complete
-  Future<Map<String, dynamic>> toggleComplete(String id, bool isCompleted) async {
+  Future<Map<String, dynamic>> toggleComplete(
+      String id, bool isCompleted) async {
     try {
       final response = await _apiClient.patch(
         '${AppConstants.todosEndpoint}/$id/toggle',

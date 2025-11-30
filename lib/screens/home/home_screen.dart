@@ -9,7 +9,7 @@ import '../settings/settings_screen.dart';
 class HomeScreen extends StatefulWidget {
   final SharedPreferences prefs;
   final VoidCallback onThemeToggle;
-  
+
   const HomeScreen({
     super.key,
     required this.prefs,
@@ -22,7 +22,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
-  
+
   late final List<Widget> _pages;
 
   @override

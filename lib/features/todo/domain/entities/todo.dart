@@ -17,7 +17,7 @@ class Todo extends Equatable {
   final bool isDeleted;
   final bool isSynced;
   final int version;
-  
+
   const Todo({
     this.id,
     this.clientId,
@@ -36,15 +36,15 @@ class Todo extends Equatable {
     this.isSynced = false,
     this.version = 1,
   });
-  
+
   factory Todo.fromJson(Map<String, dynamic> json) {
     return Todo(
       id: json['id'],
       clientId: json['client_id'],
       title: json['title'],
       description: json['description'],
-      isCompleted: json['is_completed'] is int 
-          ? json['is_completed'] == 1 
+      isCompleted: json['is_completed'] is int
+          ? json['is_completed'] == 1
           : json['is_completed'] ?? false,
       categoryId: json['category_id'],
       priority: json['priority'] ?? 'medium',
@@ -53,21 +53,23 @@ class Todo extends Equatable {
               ? (json['tags'] as String).split(',')
               : List<String>.from(json['tags']))
           : [],
-      dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']).toLocal() : null,
-      reminderTime: json['reminder_time'] != null ? DateTime.parse(json['reminder_time']).toLocal() : null,
+      dueDate: json['due_date'] != null
+          ? DateTime.parse(json['due_date']).toLocal()
+          : null,
+      reminderTime: json['reminder_time'] != null
+          ? DateTime.parse(json['reminder_time']).toLocal()
+          : null,
       position: json['position'] ?? 0,
       createdAt: DateTime.parse(json['created_at']),
       updatedAt: DateTime.parse(json['updated_at']),
-      isDeleted: json['is_deleted'] is int 
-          ? json['is_deleted'] == 1 
+      isDeleted: json['is_deleted'] is int
+          ? json['is_deleted'] == 1
           : json['is_deleted'] ?? false,
-      isSynced: json['is_synced'] is int 
-          ? json['is_synced'] == 1 
-          : true,
+      isSynced: json['is_synced'] is int ? json['is_synced'] == 1 : true,
       version: json['version'] ?? 1,
     );
   }
-  
+
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -88,7 +90,7 @@ class Todo extends Equatable {
       'version': version,
     };
   }
-  
+
   Map<String, dynamic> toDatabase() {
     return {
       'id': id,
@@ -109,7 +111,7 @@ class Todo extends Equatable {
       'version': version,
     };
   }
-  
+
   Todo copyWith({
     int? id,
     String? clientId,
@@ -147,7 +149,7 @@ class Todo extends Equatable {
       version: version ?? this.version,
     );
   }
-  
+
   @override
   List<Object?> get props => [
         id,

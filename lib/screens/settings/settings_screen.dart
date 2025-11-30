@@ -5,6 +5,7 @@ import '../../core/services/auth_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../auth/login_screen.dart';
 import '../categories/category_list_screen.dart'; // Import màn hình danh mục
+import 'profile_edit_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final SharedPreferences prefs;
@@ -52,7 +53,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           // User Info Card
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -62,7 +64,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     backgroundColor: AppColors.primary.withOpacity(0.1),
                     child: Text(
                       userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                         color: AppColors.primary,
@@ -104,9 +106,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          
+
           Card(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Column(
               children: [
                 ListTile(
@@ -115,7 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: Switch(
                     value: isDarkMode,
                     onChanged: (value) => widget.onThemeToggle(),
-                    activeColor: AppColors.primary,
+                    activeThumbColor: AppColors.primary,
                   ),
                 ),
                 const Divider(height: 1),
@@ -135,22 +138,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const Divider(height: 1),
                 ListTile(
-                  leading: const Icon(Icons.language_outlined),
-                  title: const Text('Ngôn ngữ'),
-                  trailing: const Text('Tiếng Việt'),
-                  onTap: () {},
+                  leading: const Icon(Icons.person_outline),
+                  title: const Text('Sửa hồ sơ'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProfileEditScreen(prefs: widget.prefs),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
           ),
-          
+
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
               onPressed: _logout,
               icon: const Icon(Icons.logout, color: Colors.red),
-              label: const Text('Đăng xuất', style: TextStyle(color: Colors.red)),
+              label:
+                  const Text('Đăng xuất', style: TextStyle(color: Colors.red)),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: Colors.red),
                 padding: const EdgeInsets.symmetric(vertical: 12),

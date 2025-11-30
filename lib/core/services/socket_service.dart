@@ -18,7 +18,7 @@ class SocketService with ChangeNotifier {
   void connect() {
     if (_socket != null && _socket!.connected) return;
 
-    final url = AppConstants.baseUrl;
+    const url = AppConstants.baseUrl;
     _socket = io.io(url, {
       'transports': ['websocket'],
       'autoConnect': true,
@@ -46,6 +46,17 @@ class SocketService with ChangeNotifier {
           id: data['id'] ?? 0,
           title: "⏰ Nhắc nhở công việc",
           body: data['message'] ?? "Bạn có công việc sắp đến hạn!",
+        );
+      }
+    });
+    // Deadline events
+    _socket!.on('todo_deadline', (data) {
+      print("⏳ Đến hạn công việc: $data");
+      if (data is Map) {
+        NotificationService().showNotification(
+          id: (data['id'] ?? 0) + 500, // tránh trùng với reminder
+          title: data['title'] ?? "⏳ Công việc đến hạn",
+          body: data['message'] ?? "Một công việc đã đến hạn chót!",
         );
       }
     });

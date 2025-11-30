@@ -26,11 +26,16 @@ class Event {
       description: json['description'],
       eventDate: DateTime.parse(json['event_date']),
       themeColor: json['color'] ?? json['theme_color'] ?? '#FF5722',
-      isAnnual: json['is_recurring'] == 1 || json['is_recurring'] == true || json['is_annual'] == true,
+      isAnnual: json['is_recurring'] == 1 ||
+          json['is_recurring'] == true ||
+          json['is_annual'] == true,
       eventType: json['event_type'],
-      notificationEnabled: json['notification_enabled'] == 1 || json['notification_enabled'] == true,
+      notificationEnabled: json['notification_enabled'] == 1 ||
+          json['notification_enabled'] == true,
     );
   }
+
+  get recurrencePattern => null;
 
   Map<String, dynamic> toJson() {
     return {

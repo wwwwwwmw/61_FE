@@ -20,16 +20,23 @@ class EventFormScreen extends StatefulWidget {
   State<EventFormScreen> createState() => _EventFormScreenState();
 }
 
-class _EventFormScreenState extends State<EventFormScreen> {
+class _EventFormScreenState extends State<EventFormScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
-  
+
   DateTime _eventDate = DateTime.now();
   TimeOfDay _eventTime = TimeOfDay.now();
   String _themeColor = '#FF5722'; // Default orange
-  bool _isAnnual = false;
+  bool _isRecurring = false;
+  String? _recurrencePattern; // 'daily' | 'weekly' | 'monthly' | 'yearly'
   bool _isLoading = false;
+  late TabController _tabController;
+  // Mode: 0 = Cố định (Fixed date/time), 1 = Đếm ngược (Countdown duration)
+  int _modeIndex = 0;
+  int _countdownHours = 0;
+  int _countdownMinutes = 30; // default 30 minutes
 
   late final EventService _eventService;
 
@@ -48,14 +55,25 @@ class _EventFormScreenState extends State<EventFormScreen> {
   void initState() {
     super.initState();
     _eventService = EventService(ApiClient(widget.prefs));
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      setState(() => _modeIndex = _tabController.index);
+    });
 
     if (widget.event != null) {
+      // Khi sửa sự kiện hiện tại, luôn hiển thị ở chế độ "Cố định"
       _titleController.text = widget.event!.title;
       _descriptionController.text = widget.event!.description ?? '';
       _eventDate = widget.event!.eventDate;
       _eventTime = TimeOfDay.fromDateTime(widget.event!.eventDate);
       _themeColor = widget.event!.themeColor;
-      _isAnnual = widget.event!.isAnnual;
+      _isRecurring = widget.event!.isAnnual; // backward-compatible mapping
+      // If entity has recurrencePattern, map it; else default yearly when isAnnual
+      _recurrencePattern = widget.event!.recurrencePattern ??
+          (widget.event!.isAnnual ? 'yearly' : null);
+      _modeIndex = 0;
+      _tabController.animateTo(0);
     }
   }
 
@@ -63,6 +81,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -94,13 +113,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     return '#${color.value.toRadixString(16).substring(2).toUpperCase()}';
   }
 
-  Color _hexToColor(String hex) {
-    try {
-      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
-    } catch (_) {
-      return const Color(0xFFFF5722);
-    }
-  }
+  // _hexToColor removed (unused)
 
   Future<void> _saveEvent() async {
     if (!_formKey.currentState!.validate()) return;
@@ -108,21 +121,35 @@ class _EventFormScreenState extends State<EventFormScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final dateTime = DateTime(
-        _eventDate.year,
-        _eventDate.month,
-        _eventDate.day,
-        _eventTime.hour,
-        _eventTime.minute,
-      );
+      // Tính toán event_date theo mode
+      DateTime dateTime;
+      if (_modeIndex == 0) {
+        // Cố định
+        dateTime = DateTime(
+          _eventDate.year,
+          _eventDate.month,
+          _eventDate.day,
+          _eventTime.hour,
+          _eventTime.minute,
+        );
+      } else {
+        // Đếm ngược
+        final duration =
+            Duration(hours: _countdownHours, minutes: _countdownMinutes);
+        dateTime = DateTime.now().add(duration);
+      }
 
       final eventData = {
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'event_date': dateTime.toIso8601String(),
         'color': _themeColor,
-        'is_recurring': _isAnnual,
+        'is_recurring': _isRecurring,
+        'recurrence_pattern': _isRecurring ? _recurrencePattern : null,
         'notification_enabled': true,
+        'event_type': _modeIndex == 1 ? 'countdown' : 'fixed',
+        'countdown_hours': _modeIndex == 1 ? _countdownHours : null,
+        'countdown_minutes': _modeIndex == 1 ? _countdownMinutes : null,
       };
 
       if (widget.event == null) {
@@ -163,6 +190,13 @@ class _EventFormScreenState extends State<EventFormScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.event == null ? 'Thêm Sự Kiện' : 'Sửa Sự Kiện'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Cố định'),
+            Tab(text: 'Đếm ngược'),
+          ],
+        ),
         actions: [
           if (_isLoading)
             const Center(
@@ -202,37 +236,81 @@ class _EventFormScreenState extends State<EventFormScreen> {
               },
             ),
             const SizedBox(height: 16),
-
-            // Date & Time
-            Row(
-              children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: _selectDate,
-                    child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Ngày',
-                        prefixIcon: Icon(Icons.calendar_today),
+            // Mode specific input
+            if (_modeIndex == 0) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: _selectDate,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Ngày',
+                          prefixIcon: Icon(Icons.calendar_today),
+                        ),
+                        child:
+                            Text(DateFormat('dd/MM/yyyy').format(_eventDate)),
                       ),
-                      child: Text(DateFormat('dd/MM/yyyy').format(_eventDate)),
                     ),
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: InkWell(
-                    onTap: _selectTime,
-                    child: InputDecorator(
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: InkWell(
+                      onTap: _selectTime,
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Giờ',
+                          prefixIcon: Icon(Icons.access_time),
+                        ),
+                        child: Text(_eventTime.format(context)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              const Text('Thời lượng đếm ngược',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      initialValue: _countdownHours.toString(),
+                      keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         labelText: 'Giờ',
-                        prefixIcon: Icon(Icons.access_time),
+                        prefixIcon: Icon(Icons.timer),
                       ),
-                      child: Text(_eventTime.format(context)),
+                      onChanged: (v) {
+                        final val = int.tryParse(v) ?? 0;
+                        setState(() => _countdownHours = val.clamp(0, 999));
+                      },
                     ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: TextFormField(
+                      initialValue: _countdownMinutes.toString(),
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Phút',
+                        prefixIcon: Icon(Icons.timelapse),
+                      ),
+                      onChanged: (v) {
+                        final val = int.tryParse(v) ?? 0;
+                        setState(() => _countdownMinutes = val.clamp(0, 59));
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Sẽ lưu thời điểm = Hiện tại + ${_countdownHours}h ${_countdownMinutes}m',
+                style: TextStyle(color: Colors.grey[700]),
+              ),
+            ],
             const SizedBox(height: 16),
 
             // Description
@@ -247,7 +325,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
             const SizedBox(height: 16),
 
             // Color Picker
-            const Text('Màu sắc', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Màu sắc',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
             Wrap(
               spacing: 12,
@@ -275,14 +354,42 @@ class _EventFormScreenState extends State<EventFormScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Recurring Switch
-            SwitchListTile(
-              title: const Text('Sự kiện hàng năm'),
-              subtitle: const Text('Lặp lại vào ngày này mỗi năm'),
-              value: _isAnnual,
-              onChanged: (value) => setState(() => _isAnnual = value),
-              secondary: const Icon(Icons.loop),
-            ),
+            // Recurrence controls (only in fixed mode)
+            if (_modeIndex == 0) ...[
+              SwitchListTile(
+                title: const Text('Lặp lại'),
+                subtitle: const Text('Tự động lặp theo chu kỳ đã chọn'),
+                value: _isRecurring,
+                onChanged: (value) => setState(() => _isRecurring = value),
+                secondary: const Icon(Icons.loop),
+              ),
+              if (_isRecurring) ...[
+                const SizedBox(height: 8),
+                InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Chu kỳ lặp',
+                    prefixIcon: Icon(Icons.repeat),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _recurrencePattern,
+                      hint: const Text('Chọn chu kỳ'),
+                      items: const [
+                        DropdownMenuItem(
+                            value: 'daily', child: Text('Hàng ngày')),
+                        DropdownMenuItem(
+                            value: 'weekly', child: Text('Hàng tuần')),
+                        DropdownMenuItem(
+                            value: 'monthly', child: Text('Hàng tháng')),
+                        DropdownMenuItem(
+                            value: 'yearly', child: Text('Hàng năm')),
+                      ],
+                      onChanged: (v) => setState(() => _recurrencePattern = v),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ],
         ),
       ),

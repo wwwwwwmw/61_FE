@@ -20,11 +20,11 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _descController = TextEditingController();
-  
+
   DateTime? _dueDate;
   DateTime? _reminderTime;
   String _priority = 'medium';
-  
+
   // Quản lý danh mục
   List<dynamic> _categories = [];
   int? _selectedCategoryId;
@@ -35,7 +35,7 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
   void initState() {
     super.initState();
     _fetchCategories(); // Tải danh mục người dùng đã tạo
-    
+
     if (widget.todo != null) {
       _titleController.text = widget.todo!.title;
       _descController.text = widget.todo!.description ?? '';
@@ -51,15 +51,17 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
     try {
       final client = ApiClient(widget.prefs);
       // Gọi API lấy danh mục, filter type=todo hoặc both
-      final res = await client.get('${AppConstants.categoriesEndpoint}?type=todo');
+      final res =
+          await client.get('${AppConstants.categoriesEndpoint}?type=todo');
       if (res.data['success']) {
         setState(() {
           _categories = res.data['data'];
           _isLoadingCategories = false;
-          
+
           // Nếu đang edit mà danh mục cũ bị xóa, reset về null
           if (_selectedCategoryId != null) {
-            final exists = _categories.any((c) => c['id'] == _selectedCategoryId);
+            final exists =
+                _categories.any((c) => c['id'] == _selectedCategoryId);
             if (!exists) _selectedCategoryId = null;
           }
         });
@@ -76,11 +78,13 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
 
     try {
       final client = ApiClient(widget.prefs);
-      
+
       // Lấy tên danh mục làm tag (nếu có chọn danh mục)
       List<String> tags = [];
       if (_selectedCategoryId != null) {
-        final cat = _categories.firstWhere((c) => c['id'] == _selectedCategoryId, orElse: () => null);
+        final cat = _categories.firstWhere(
+            (c) => c['id'] == _selectedCategoryId,
+            orElse: () => null);
         if (cat != null) tags.add(cat['name']);
       }
 
@@ -97,12 +101,16 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
       if (widget.todo == null) {
         await client.post(AppConstants.todosEndpoint, data: data);
       } else {
-        await client.put('${AppConstants.todosEndpoint}/${widget.todo!.id}', data: data);
+        await client.put('${AppConstants.todosEndpoint}/${widget.todo!.id}',
+            data: data);
       }
 
       if (mounted) Navigator.pop(context, true); // Trả về true để reload list
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -123,12 +131,12 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(
-        isDueDate ? (_dueDate ?? now) : (_reminderTime ?? now)
-      ),
+          isDueDate ? (_dueDate ?? now) : (_reminderTime ?? now)),
     );
     if (time == null) return;
 
-    final result = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    final result =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
     setState(() {
       if (isDueDate) {
         _dueDate = result;
@@ -161,7 +169,7 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
                 validator: (v) => v!.isEmpty ? 'Nhập tiêu đề' : null,
               ),
               const SizedBox(height: 16),
-              
+
               TextFormField(
                 controller: _descController,
                 decoration: const InputDecoration(
@@ -175,7 +183,7 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
 
               // --- CHỌN DANH MỤC (Thay thế Tags) ---
               DropdownButtonFormField<int>(
-                value: _selectedCategoryId,
+                initialValue: _selectedCategoryId,
                 decoration: const InputDecoration(
                   labelText: 'Danh mục',
                   border: OutlineInputBorder(),
@@ -186,7 +194,10 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
                     value: cat['id'],
                     child: Row(
                       children: [
-                        Icon(Icons.circle, color: Color(int.parse(cat['color'].replaceAll('#', '0xFF'))), size: 12),
+                        Icon(Icons.circle,
+                            color: Color(int.parse(
+                                cat['color'].replaceAll('#', '0xFF'))),
+                            size: 12),
                         const SizedBox(width: 8),
                         Text(cat['name']),
                       ],
@@ -194,24 +205,32 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
                   );
                 }).toList(),
                 onChanged: (val) => setState(() => _selectedCategoryId = val),
-                hint: _isLoadingCategories 
-                    ? const Text('Đang tải danh mục...') 
+                hint: _isLoadingCategories
+                    ? const Text('Đang tải danh mục...')
                     : const Text('Chọn danh mục'),
               ),
               const SizedBox(height: 16),
 
               // Chọn độ ưu tiên
               DropdownButtonFormField<String>(
-                value: _priority,
+                initialValue: _priority,
                 decoration: const InputDecoration(
                   labelText: 'Độ ưu tiên',
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.flag),
                 ),
                 items: const [
-                  DropdownMenuItem(value: 'low', child: Text('Thấp', style: TextStyle(color: Colors.green))),
-                  DropdownMenuItem(value: 'medium', child: Text('Trung bình', style: TextStyle(color: Colors.orange))),
-                  DropdownMenuItem(value: 'high', child: Text('Cao', style: TextStyle(color: Colors.red))),
+                  DropdownMenuItem(
+                      value: 'low',
+                      child:
+                          Text('Thấp', style: TextStyle(color: Colors.green))),
+                  DropdownMenuItem(
+                      value: 'medium',
+                      child: Text('Trung bình',
+                          style: TextStyle(color: Colors.orange))),
+                  DropdownMenuItem(
+                      value: 'high',
+                      child: Text('Cao', style: TextStyle(color: Colors.red))),
                 ],
                 onChanged: (v) => setState(() => _priority = v!),
               ),
@@ -224,9 +243,9 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
                     child: OutlinedButton.icon(
                       onPressed: () => _pickDateTime(true),
                       icon: const Icon(Icons.calendar_today),
-                      label: Text(_dueDate == null 
-                        ? 'Hạn chót' 
-                        : DateFormat('dd/MM HH:mm').format(_dueDate!)),
+                      label: Text(_dueDate == null
+                          ? 'Hạn chót'
+                          : DateFormat('dd/MM HH:mm').format(_dueDate!)),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -234,19 +253,19 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
                     child: OutlinedButton.icon(
                       onPressed: () => _pickDateTime(false),
                       icon: const Icon(Icons.alarm),
-                      label: Text(_reminderTime == null 
-                        ? 'Nhắc nhở' 
-                        : DateFormat('dd/MM HH:mm').format(_reminderTime!)),
+                      label: Text(_reminderTime == null
+                          ? 'Nhắc nhở'
+                          : DateFormat('dd/MM HH:mm').format(_reminderTime!)),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: _reminderTime != null && _reminderTime!.isBefore(DateTime.now()) 
-                            ? Colors.red 
-                            : null
-                      ),
+                          foregroundColor: _reminderTime != null &&
+                                  _reminderTime!.isBefore(DateTime.now())
+                              ? Colors.red
+                              : null),
                     ),
                   ),
                 ],
               ),
-              
+
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _isSaving ? null : _saveTodo,
@@ -255,9 +274,10 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                child: _isSaving 
-                    ? const CircularProgressIndicator(color: Colors.white) 
-                    : const Text('Lưu công việc', style: TextStyle(fontSize: 16)),
+                child: _isSaving
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text('Lưu công việc',
+                        style: TextStyle(fontSize: 16)),
               ),
             ],
           ),

@@ -11,7 +11,7 @@ import 'core/services/notification_service.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('vi_VN', null);
-  
+
   final prefs = await SharedPreferences.getInstance();
 
   // 1. Khởi tạo Sync Service
@@ -79,7 +79,7 @@ class _MyAppState extends State<MyApp> {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeMode,
-      home: isLoggedIn 
+      home: isLoggedIn
           ? HomeScreen(prefs: widget.prefs, onThemeToggle: _toggleTheme)
           : LoginScreen(prefs: widget.prefs),
     );

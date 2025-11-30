@@ -1,3 +1,4 @@
+import 'package:dio/src/response.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/network/api_client.dart';
@@ -50,25 +51,31 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
         'icon': 'folder', // Default icon
       };
 
-      late final response;
+      late final Response response;
       if (widget.category == null) {
-        response = await client.post(AppConstants.categoriesEndpoint, data: data);
+        response =
+            await client.post(AppConstants.categoriesEndpoint, data: data);
       } else {
-        response = await client.put('${AppConstants.categoriesEndpoint}/${widget.category!['id']}', data: data);
+        response = await client.put(
+            '${AppConstants.categoriesEndpoint}/${widget.category!['id']}',
+            data: data);
       }
 
       if (response.data['success']) {
-        if(mounted) Navigator.pop(context, true);
+        if (mounted) Navigator.pop(context, true);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(widget.category == null ? 'Thêm Danh mục' : 'Sửa Danh mục')),
+      appBar: AppBar(
+          title:
+              Text(widget.category == null ? 'Thêm Danh mục' : 'Sửa Danh mục')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -82,7 +89,7 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: const InputDecoration(labelText: 'Loại'),
                 items: const [
                   DropdownMenuItem(value: 'both', child: Text('Chung')),
@@ -93,18 +100,24 @@ class _CategoryFormScreenState extends State<CategoryFormScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: _selectedColor,
+                initialValue: _selectedColor,
                 decoration: const InputDecoration(labelText: 'Màu sắc'),
-                items: _colors.map((c) => DropdownMenuItem(
-                  value: c['hex'],
-                  child: Row(
-                    children: [
-                      Container(width: 20, height: 20, color: Color(int.parse(c['hex']!.replaceAll('#', '0xFF')))),
-                      const SizedBox(width: 10),
-                      Text(c['name']!),
-                    ],
-                  ),
-                )).toList(),
+                items: _colors
+                    .map((c) => DropdownMenuItem(
+                          value: c['hex'],
+                          child: Row(
+                            children: [
+                              Container(
+                                  width: 20,
+                                  height: 20,
+                                  color: Color(int.parse(
+                                      c['hex']!.replaceAll('#', '0xFF')))),
+                              const SizedBox(width: 10),
+                              Text(c['name']!),
+                            ],
+                          ),
+                        ))
+                    .toList(),
                 onChanged: (v) => setState(() => _selectedColor = v!),
               ),
               const SizedBox(height: 24),

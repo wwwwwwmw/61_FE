@@ -21,12 +21,15 @@ class _EventListScreenState extends State<EventListScreen> {
   List<Event> _events = [];
   bool _isLoading = true;
   Timer? _timer;
+  // Filters
+  List<Map<String, dynamic>> _categories = [];
+  DateTimeRange? _dateRange;
 
   @override
   void initState() {
     super.initState();
     _eventService = EventService(ApiClient(widget.prefs));
-    _fetchEvents();
+    _fetchInitial();
 
     // Timer to update countdown every second
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -38,6 +41,26 @@ class _EventListScreenState extends State<EventListScreen> {
   void dispose() {
     _timer?.cancel();
     super.dispose();
+  }
+
+  Future<void> _fetchInitial() async {
+    await Future.wait([
+      _fetchCategories(),
+      _fetchEvents(),
+    ]);
+  }
+
+  Future<void> _fetchCategories() async {
+    try {
+      final api = ApiClient(widget.prefs);
+      final res = await api.get('/categories');
+      final data = res.data;
+      if (data is List) {
+        setState(() => _categories = List<Map<String, dynamic>>.from(data));
+      }
+    } catch (e) {
+      // silent fail, giữ UI hoạt động
+    }
   }
 
   Future<void> _fetchEvents() async {
@@ -123,33 +146,103 @@ class _EventListScreenState extends State<EventListScreen> {
     return Colors.blue;
   }
 
+  List<Event> get _filteredEvents {
+    return _events.where((e) {
+      // Hiện tại schema events không có category_id, nên chỉ áp dụng lọc theo ngày.
+      if (_dateRange != null) {
+        if (e.eventDate.isBefore(_dateRange!.start) ||
+            e.eventDate.isAfter(_dateRange!.end)) {
+          return false;
+        }
+      }
+      return true;
+    }).toList();
+  }
+
+  Future<void> _pickDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 2),
+      initialDateRange: _dateRange ??
+          DateTimeRange(start: now, end: now.add(const Duration(days: 7))),
+    );
+    if (picked != null) {
+      setState(() => _dateRange = picked);
+    }
+  }
+
+  Widget _buildFilterBar() {
+    return SizedBox(
+      height: 64,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        children: [
+          // Category chips
+          // Danh mục: Hiển thị nhưng không gắn với sự kiện (placeholder nếu sau này bổ sung schema)
+          ..._categories.map((c) {
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Chip(
+                label: Text(c['name'] ?? 'Danh mục'),
+              ),
+            );
+          }),
+          // Date Range
+          ChoiceChip(
+            label: Text(_dateRange == null
+                ? 'Khoảng thời gian'
+                : '${DateFormat('dd/MM').format(_dateRange!.start)} - ${DateFormat('dd/MM').format(_dateRange!.end)}'),
+            selected: _dateRange != null,
+            onSelected: (_) => _pickDateRange(),
+          ),
+          if (_dateRange != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: ActionChip(
+                label: const Text('Xóa lọc'),
+                onPressed: () => setState(() => _dateRange = null),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Đếm Ngược Sự Kiện"),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _navigateToForm(),
-          ),
-        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _navigateToForm(),
+        child: const Icon(Icons.add),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _events.isEmpty
               ? const Center(child: Text("Chưa có sự kiện nào"))
-              : RefreshIndicator(
-                  onRefresh: _fetchEvents,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _events.length,
-                    itemBuilder: (context, index) {
-                      final event = _events[index];
-                      return _buildEventCard(event);
-                    },
-                  ),
+              : Column(
+                  children: [
+                    _buildFilterBar(),
+                    Expanded(
+                      child: RefreshIndicator(
+                        onRefresh: _fetchEvents,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _filteredEvents.length,
+                          itemBuilder: (context, index) {
+                            final event = _filteredEvents[index];
+                            return _buildEventCard(event);
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
     );
   }
@@ -202,11 +295,20 @@ class _EventListScreenState extends State<EventListScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (event.isAnnual)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 8.0),
-                      child: Icon(Icons.loop, color: Colors.white70),
-                    ),
+                  Row(
+                    children: [
+                      if (event.isAnnual)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8.0),
+                          child: Icon(Icons.loop, color: Colors.white70),
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline,
+                            color: Colors.white),
+                        onPressed: () => _deleteEvent(event),
+                      ),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 4),

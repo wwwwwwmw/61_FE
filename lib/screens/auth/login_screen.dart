@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/services/auth_service.dart';
 import '../home/home_screen.dart';
 import 'otp_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final SharedPreferences prefs;
-  
+
   const LoginScreen({super.key, required this.prefs});
 
   @override
@@ -21,7 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   final _nameController = TextEditingController();
   late final _authService = AuthService(widget.prefs);
-  
+
   bool _isLogin = true;
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -46,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-        
+
         // Response is the user data, tokens are already saved by auth service
         if (mounted) {
           Navigator.of(context).pushReplacement(
@@ -65,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
           email: _emailController.text.trim(),
           password: _passwordController.text,
         );
-        
+
         if (response['success'] == true && response['requireOtp'] == true) {
           // Navigate to OTP verification screen
           if (mounted) {
@@ -100,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -123,7 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.account_balance_wallet,
                           size: 64,
                           color: AppColors.primary,
@@ -131,20 +130,26 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 16),
                         Text(
                           'Ứng Dụng Tiện Ích',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.primary,
                               ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          _isLogin ? 'Đăng nhập để tiếp tục' : 'Tạo tài khoản mới',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey,
-                              ),
+                          _isLogin
+                              ? 'Đăng nhập để tiếp tục'
+                              : 'Tạo tài khoản mới',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Colors.grey,
+                                  ),
                         ),
                         const SizedBox(height: 32),
-                        
+
                         // Name field (only for register)
                         if (!_isLogin) ...[
                           TextFormField(
@@ -154,7 +159,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               prefixIcon: Icon(Icons.person),
                             ),
                             validator: (value) {
-                              if (!_isLogin && (value == null || value.isEmpty)) {
+                              if (!_isLogin &&
+                                  (value == null || value.isEmpty)) {
                                 return 'Vui lòng nhập họ tên';
                               }
                               return null;
@@ -162,7 +168,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 16),
                         ],
-                        
+
                         // Email field
                         TextFormField(
                           controller: _emailController,
@@ -182,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                         ),
                         const SizedBox(height: 16),
-                        
+
                         // Password field
                         TextFormField(
                           controller: _passwordController,
@@ -191,10 +197,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             prefixIcon: const Icon(Icons.lock),
                             suffixIcon: IconButton(
                               icon: Icon(
-                                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                                _obscurePassword
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
                               ),
                               onPressed: () {
-                                setState(() => _obscurePassword = !_obscurePassword);
+                                setState(
+                                    () => _obscurePassword = !_obscurePassword);
                               },
                             ),
                           ),
@@ -210,7 +219,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                         ),
                         const SizedBox(height: 24),
-                        
+
                         // Submit button
                         SizedBox(
                           width: double.infinity,
@@ -240,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        
+
                         // Toggle login/register
                         TextButton(
                           onPressed: () {

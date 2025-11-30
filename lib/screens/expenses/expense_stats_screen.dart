@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'dart:convert';
 import '../../core/theme/app_colors.dart';
 import '../../core/database/app_database.dart';
+import '../../core/network/api_client.dart';
 
 class ExpenseStatsScreen extends StatefulWidget {
   final SharedPreferences prefs;
@@ -21,6 +22,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
   String _selectedPeriod = 'month'; // today, week, month, year
   List<Map<String, dynamic>> _transactions = [];
   Map<String, double> _categoryStats = {};
+  final Map<int, String> _categoryNames = {};
   final List<Color> _chartColors = [
     Colors.blue,
     Colors.red,
@@ -42,20 +44,48 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      if (kIsWeb) {
-        final prefs = await SharedPreferences.getInstance();
-        final expensesJson = prefs.getString('expenses') ?? '[]';
-        final List<dynamic> expenses = json.decode(expensesJson);
-        _processStats(expenses.cast<Map<String, dynamic>>());
-      } else {
-        final db = await AppDatabase().database;
-        final result = await db.query(
-          'expenses',
-          where: 'is_deleted = ?',
-          whereArgs: [0],
-          orderBy: 'date DESC',
-        );
-        _processStats(result);
+      // Ưu tiên gọi API để có dữ liệu đồng bộ (bao gồm category_id)
+      final api = ApiClient(widget.prefs);
+      bool remoteLoaded = false;
+      try {
+        // Tải categories để map tên
+        final catsResp = await api.get('/categories');
+        final catsData = catsResp.data;
+        if (catsData is List) {
+          for (final c in catsData) {
+            if (c is Map<String, dynamic> && c['id'] != null) {
+              _categoryNames[c['id']] = c['name'] ?? 'Danh mục';
+            }
+          }
+        }
+        // Tải expenses (có thể cần tham số thời gian sau này)
+        final expensesResp = await api.get('/expenses');
+        final expensesData = expensesResp.data;
+        if (expensesData is List) {
+          _processStats(List<Map<String, dynamic>>.from(expensesData));
+          remoteLoaded = true;
+        }
+      } catch (_) {
+        remoteLoaded = false;
+      }
+
+      if (!remoteLoaded) {
+        // Fallback: local storage / sqlite
+        if (kIsWeb) {
+          final prefs = await SharedPreferences.getInstance();
+          final expensesJson = prefs.getString('expenses') ?? '[]';
+          final List<dynamic> expenses = json.decode(expensesJson);
+          _processStats(expenses.cast<Map<String, dynamic>>());
+        } else {
+          final db = await AppDatabase().database;
+          final result = await db.query(
+            'expenses',
+            where: 'is_deleted = ?',
+            whereArgs: [0],
+            orderBy: 'date DESC',
+          );
+          _processStats(result);
+        }
       }
     } catch (e) {
       print('Error loading stats: $e');
@@ -91,12 +121,22 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
     // Calculate category stats
     final Map<String, double> stats = {};
     for (var transaction in filtered) {
-      final category = transaction['description'] as String? ?? 'Khác';
-      final amount = (transaction['amount'] is int)
-          ? (transaction['amount'] as int).toDouble()
-          : (transaction['amount'] as double? ?? 0.0);
-
-      stats[category] = (stats[category] ?? 0) + amount;
+      // Đặt tên danh mục theo category_id nếu có, fallback sang description
+      String categoryName;
+      if (transaction.containsKey('category_id') &&
+          transaction['category_id'] != null) {
+        final cid = transaction['category_id'];
+        categoryName = _categoryNames[cid] ?? 'Khác';
+      } else {
+        categoryName = transaction['description'] as String? ?? 'Khác';
+      }
+      final amountRaw = transaction['amount'];
+      final amount = amountRaw is int
+          ? amountRaw.toDouble()
+          : (amountRaw is double
+              ? amountRaw
+              : double.tryParse(amountRaw.toString()) ?? 0.0);
+      stats[categoryName] = (stats[categoryName] ?? 0) + amount;
     }
 
     setState(() {
@@ -142,8 +182,8 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
                   Text(
                     'Chi Tiêu Theo Danh Mục',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 16),
                   _buildPieChart(),
@@ -155,8 +195,8 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
                   Text(
                     'Chi Tiết',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 12),
                   ..._buildCategoryList(),

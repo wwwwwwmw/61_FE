@@ -7,17 +7,17 @@ class AuthService {
   final SharedPreferences _prefs;
 
   AuthService(this._prefs)
-    : _dio = Dio(
-        BaseOptions(
-          baseUrl: AppConstants.baseUrl,
-          connectTimeout: AppConstants.connectionTimeout,
-          receiveTimeout: AppConstants.receiveTimeout,
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-        ),
-      );
+      : _dio = Dio(
+          BaseOptions(
+            baseUrl: AppConstants.baseUrl,
+            connectTimeout: AppConstants.connectionTimeout,
+            receiveTimeout: AppConstants.receiveTimeout,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          ),
+        );
 
   // Send OTP (registration or forgot_password)
   Future<bool> sendOtp(String email, {String type = 'registration'}) async {
@@ -39,7 +39,7 @@ class AuthService {
         '${AppConstants.authEndpoint}/verify-otp',
         data: {'email': email, 'otp': otp},
       );
-      
+
       if (res.data['success'] == true) {
         // Backend returns tokens on successful verification
         if (res.data['data'] != null) {

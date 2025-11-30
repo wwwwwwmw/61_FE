@@ -34,7 +34,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
         });
       }
     } catch (e) {
-      if(mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -43,9 +43,13 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
       final client = ApiClient(widget.prefs);
       await client.delete('${AppConstants.categoriesEndpoint}/$id');
       _fetchCategories();
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã xóa danh mục')));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Đã xóa danh mục')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Không thể xóa danh mục đang dùng')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Không thể xóa danh mục đang dùng')));
     }
   }
 
@@ -65,7 +69,9 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                     child: const Icon(Icons.folder, color: Colors.white),
                   ),
                   title: Text(cat['name']),
-                  subtitle: Text(cat['type'] == 'both' ? 'Chung' : (cat['type'] == 'expense' ? 'Chi tiêu' : 'Công việc')),
+                  subtitle: Text(cat['type'] == 'both'
+                      ? 'Chung'
+                      : (cat['type'] == 'expense' ? 'Chi tiêu' : 'Công việc')),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -75,10 +81,11 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
                           final res = await Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => CategoryFormScreen(prefs: widget.prefs, category: cat),
+                              builder: (_) => CategoryFormScreen(
+                                  prefs: widget.prefs, category: cat),
                             ),
                           );
-                          if(res == true) _fetchCategories();
+                          if (res == true) _fetchCategories();
                         },
                       ),
                       IconButton(
@@ -98,7 +105,7 @@ class _CategoryListScreenState extends State<CategoryListScreen> {
               builder: (_) => CategoryFormScreen(prefs: widget.prefs),
             ),
           );
-          if(res == true) _fetchCategories();
+          if (res == true) _fetchCategories();
         },
         child: const Icon(Icons.add),
       ),

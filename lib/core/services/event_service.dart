@@ -32,7 +32,8 @@ class EventService {
   }
 
   // Create event
-  Future<Map<String, dynamic>> createEvent(Map<String, dynamic> eventData) async {
+  Future<Map<String, dynamic>> createEvent(
+      Map<String, dynamic> eventData) async {
     try {
       final response = await _apiClient.post(
         AppConstants.eventsEndpoint,

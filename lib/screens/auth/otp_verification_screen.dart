@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/services/auth_service.dart';
 import '../home/home_screen.dart';
 import 'dart:async';
@@ -9,7 +8,7 @@ import 'dart:async';
 class OtpVerificationScreen extends StatefulWidget {
   final SharedPreferences prefs;
   final String email;
-  
+
   const OtpVerificationScreen({
     super.key,
     required this.prefs,
@@ -24,7 +23,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _otpController = TextEditingController();
   late final _authService = AuthService(widget.prefs);
-  
+
   bool _isLoading = false;
   int _resendCountdown = 60;
   Timer? _timer;
@@ -63,7 +62,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         widget.email,
         _otpController.text.trim(),
       );
-      
+
       if (response && mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
@@ -94,7 +93,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     try {
       await _authService.sendOtp(widget.email, type: 'registration');
       _startResendTimer();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -119,7 +118,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -142,7 +141,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.mail_outline,
                           size: 64,
                           color: AppColors.primary,
@@ -150,7 +149,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         const SizedBox(height: 16),
                         Text(
                           'Xác thực OTP',
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
+                              ?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.primary,
                               ),
@@ -158,20 +160,22 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         const SizedBox(height: 8),
                         Text(
                           'Mã OTP đã được gửi đến',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Colors.grey,
+                                  ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           widget.email,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.primary,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
                         ),
                         const SizedBox(height: 32),
-                        
+
                         // OTP field
                         TextFormField(
                           controller: _otpController,
@@ -192,7 +196,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                           },
                         ),
                         const SizedBox(height: 24),
-                        
+
                         // Verify button
                         SizedBox(
                           width: double.infinity,
@@ -222,7 +226,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        
+
                         // Resend OTP button
                         TextButton(
                           onPressed: _resendCountdown > 0 ? null : _resendOtp,
@@ -232,7 +236,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                 : 'Gửi lại mã OTP',
                           ),
                         ),
-                        
+
                         // Back to login
                         TextButton(
                           onPressed: () => Navigator.of(context).pop(),

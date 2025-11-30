@@ -37,16 +37,16 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
 
     try {
       final data = await _expensesService.getExpenses();
-      final List<dynamic> expensesData = data['data'] ?? []; // Assuming API returns { data: [...] } or similar
-      // Adjust based on actual API response structure. 
+      final List<dynamic> expensesData =
+          data['data'] ?? []; // Assuming API returns { data: [...] } or similar
+      // Adjust based on actual API response structure.
       // If getExpenses returns Map<String, dynamic> from response.data, and response.data['data'] is the list.
-      // Let's check getExpenses implementation again. 
+      // Let's check getExpenses implementation again.
       // It returns Map<String, dynamic>.from(res.data).
       // So if res.data is { success: true, data: [...] }, then data['data'] is the list.
-      
-      final List<Expense> expenses = expensesData
-          .map((e) => Expense.fromJson(e))
-          .toList();
+
+      final List<Expense> expenses =
+          expensesData.map((e) => Expense.fromJson(e)).toList();
 
       _calculateStats(expenses);
     } catch (e) {
@@ -79,6 +79,40 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
       _totalExpense = expense;
       _recentTransactions = expenses.take(10).toList();
     });
+  }
+
+  Future<void> _deleteExpense(Expense exp) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa giao dịch?'),
+        content:
+            Text('Bạn có chắc muốn xóa ${exp.description ?? 'giao dịch'}?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Hủy')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Xóa', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      try {
+        await _expensesService.deleteExpense(exp.id.toString());
+        await _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('Đã xóa giao dịch')));
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('Lỗi xóa: $e')));
+        }
+      }
+    }
   }
 
   String _formatCurrency(double amount) {
@@ -157,8 +191,8 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
                       Text(
                         'Giao Dịch Gần Đây',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                              fontWeight: FontWeight.bold,
+                            ),
                       ),
                       if (_recentTransactions.isNotEmpty)
                         TextButton(
@@ -203,7 +237,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
   Widget _buildSummaryCard(double balance) {
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
+        gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: AppColors.primaryGradient,
@@ -394,7 +428,8 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
                 prefs: widget.prefs,
                 onDelete: () async {
                   try {
-                    await _expensesService.deleteExpense(transaction.id.toString());
+                    await _expensesService
+                        .deleteExpense(transaction.id.toString());
                     _loadData();
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -409,7 +444,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
               ),
             ),
           );
-          
+
           if (result == true) {
             _loadData();
           }
@@ -417,6 +452,7 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
       ),
     );
   }
+
 
   Widget _buildEmptyState() {
     return Center(

@@ -23,7 +23,7 @@ class ExpenseDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isIncome = expense.type == 'income';
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chi tiết giao dịch'),
@@ -40,7 +40,7 @@ class ExpenseDetailScreen extends StatelessWidget {
                 ),
               );
               if (result == true && onUpdate != null) {
-                // Since we don't have the updated object here without fetching, 
+                // Since we don't have the updated object here without fetching,
                 // we might need to rely on the parent to refresh.
                 // But for now let's just pop with true to indicate update.
                 if (context.mounted) {
@@ -67,7 +67,8 @@ class ExpenseDetailScreen extends StatelessWidget {
                         onPressed: () {
                           onDelete!();
                           Navigator.of(context).pop(); // Close dialog
-                          Navigator.of(context).pop(true); // Close detail screen with result
+                          Navigator.of(context)
+                              .pop(true); // Close detail screen with result
                         },
                         child: const Text(
                           'Xóa',
@@ -104,15 +105,20 @@ class ExpenseDetailScreen extends StatelessWidget {
                     Text(
                       isIncome ? 'Thu nhập' : 'Chi tiêu',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: isIncome ? AppColors.success : AppColors.error,
+                            color:
+                                isIncome ? AppColors.success : AppColors.error,
                           ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       '${_formatCurrency(expense.amount)} đ',
-                      style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineMedium
+                          ?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: isIncome ? AppColors.success : AppColors.error,
+                            color:
+                                isIncome ? AppColors.success : AppColors.error,
                           ),
                     ),
                   ],
@@ -205,6 +211,7 @@ class ExpenseDetailScreen extends StatelessWidget {
   }
 
   String _formatCurrency(double amount) {
-    return NumberFormat.currency(locale: 'vi_VN', symbol: '', decimalDigits: 0).format(amount);
+    return NumberFormat.currency(locale: 'vi_VN', symbol: '', decimalDigits: 0)
+        .format(amount);
   }
 }

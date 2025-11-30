@@ -8,7 +8,7 @@ import '../database/app_database.dart';
 
 class SyncService {
   static final SyncService _instance = SyncService._internal();
-  
+
   // Dùng late để khởi tạo sau
   late final ApiClient _apiClient;
   late final SharedPreferences _prefs;
@@ -38,7 +38,8 @@ class SyncService {
       return;
     }
 
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((result) {
+    _connectivitySubscription =
+        Connectivity().onConnectivityChanged.listen((result) {
       if (result != ConnectivityResult.none) {
         syncAll();
       }
@@ -49,7 +50,7 @@ class SyncService {
 
   Future<void> syncAll() async {
     if (_isSyncing || !_isInitialized) return;
-    
+
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity == ConnectivityResult.none) return;
 
@@ -61,8 +62,9 @@ class SyncService {
       await _syncTodos(db);
       await _syncExpenses(db);
       await _syncEvents(db);
-      
-      await _prefs.setString(AppConstants.lastSyncKey, DateTime.now().toIso8601String());
+
+      await _prefs.setString(
+          AppConstants.lastSyncKey, DateTime.now().toIso8601String());
       print('✅ Đồng bộ hoàn tất!');
     } catch (e) {
       print('❌ Lỗi đồng bộ: $e');
@@ -78,8 +80,10 @@ class SyncService {
       for (var todo in unsynced) {
         final isNew = todo['id'] == null;
         final tagsString = todo['tags'] as String?;
-        final List<String> tagsList = (tagsString != null && tagsString.isNotEmpty) 
-            ? tagsString.split(',') : [];
+        final List<String> tagsList =
+            (tagsString != null && tagsString.isNotEmpty)
+                ? tagsString.split(',')
+                : [];
 
         final data = {
           'title': todo['title'],
@@ -94,39 +98,49 @@ class SyncService {
         };
 
         if (isNew) {
-          final res = await _apiClient.post(AppConstants.todosEndpoint, data: data);
+          final res =
+              await _apiClient.post(AppConstants.todosEndpoint, data: data);
           if (res.data['success']) {
-            await db.update('todos', {
-              'id': res.data['data']['id'],
-              'is_synced': 1,
-              'version': res.data['data']['version']
-            }, where: 'client_id = ?', whereArgs: [todo['client_id']]);
+            await db.update(
+                'todos',
+                {
+                  'id': res.data['data']['id'],
+                  'is_synced': 1,
+                  'version': res.data['data']['version']
+                },
+                where: 'client_id = ?',
+                whereArgs: [todo['client_id']]);
           }
         } else {
-          final res = await _apiClient.put('${AppConstants.todosEndpoint}/${todo['id']}', data: data);
+          final res = await _apiClient
+              .put('${AppConstants.todosEndpoint}/${todo['id']}', data: data);
           if (res.data['success']) {
-            await db.update('todos', {'is_synced': 1, 'version': res.data['data']['version']}, 
-              where: 'id = ?', whereArgs: [todo['id']]);
+            await db.update('todos',
+                {'is_synced': 1, 'version': res.data['data']['version']},
+                where: 'id = ?', whereArgs: [todo['id']]);
           }
         }
       }
 
       final lastSync = _prefs.getString(AppConstants.lastSyncKey);
-      final res = await _apiClient.post('${AppConstants.todosEndpoint}/sync', 
-        data: {'todos': [], 'lastSyncTime': lastSync});
-        
+      final res = await _apiClient.post('${AppConstants.todosEndpoint}/sync',
+          data: {'todos': [], 'lastSyncTime': lastSync});
+
       if (res.data['success']) {
         final changes = res.data['data']['serverChanges'] as List;
         for (var item in changes) {
           final tagsStr = (item['tags'] as List?)?.join(',') ?? "";
-          await db.insert('todos', {
-            ...item,
-            'is_completed': item['is_completed'] == true ? 1 : 0,
-            'is_deleted': item['is_deleted'] == true ? 1 : 0,
-            'tags': tagsStr,
-            'is_synced': 1,
-            'client_id': item['client_id'] ?? item['id'].toString()
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          await db.insert(
+              'todos',
+              {
+                ...item,
+                'is_completed': item['is_completed'] == true ? 1 : 0,
+                'is_deleted': item['is_deleted'] == true ? 1 : 0,
+                'tags': tagsStr,
+                'is_synced': 1,
+                'client_id': item['client_id'] ?? item['id'].toString()
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
     } catch (e) {
@@ -151,35 +165,45 @@ class SyncService {
         };
 
         if (isNew) {
-          final res = await _apiClient.post(AppConstants.expensesEndpoint, data: data);
+          final res =
+              await _apiClient.post(AppConstants.expensesEndpoint, data: data);
           if (res.data['success']) {
-            await db.update('expenses', {
-              'id': res.data['data']['id'],
-              'is_synced': 1,
-              'version': res.data['data']['version']
-            }, where: 'client_id = ?', whereArgs: [ex['client_id']]);
+            await db.update(
+                'expenses',
+                {
+                  'id': res.data['data']['id'],
+                  'is_synced': 1,
+                  'version': res.data['data']['version']
+                },
+                where: 'client_id = ?',
+                whereArgs: [ex['client_id']]);
           }
         } else {
-          final res = await _apiClient.put('${AppConstants.expensesEndpoint}/${ex['id']}', data: data);
+          final res = await _apiClient
+              .put('${AppConstants.expensesEndpoint}/${ex['id']}', data: data);
           if (res.data['success']) {
-            await db.update('expenses', {'is_synced': 1}, where: 'id = ?', whereArgs: [ex['id']]);
+            await db.update('expenses', {'is_synced': 1},
+                where: 'id = ?', whereArgs: [ex['id']]);
           }
         }
       }
 
       final lastSync = _prefs.getString(AppConstants.lastSyncKey);
-      final res = await _apiClient.post('${AppConstants.expensesEndpoint}/sync', 
-        data: {'expenses': [], 'lastSyncTime': lastSync});
+      final res = await _apiClient.post('${AppConstants.expensesEndpoint}/sync',
+          data: {'expenses': [], 'lastSyncTime': lastSync});
 
       if (res.data['success']) {
         final changes = res.data['data']['serverChanges'] as List;
         for (var item in changes) {
-          await db.insert('expenses', {
-            ...item,
-            'is_deleted': item['is_deleted'] == true ? 1 : 0,
-            'is_synced': 1,
-            'client_id': item['client_id'] ?? item['id'].toString()
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          await db.insert(
+              'expenses',
+              {
+                ...item,
+                'is_deleted': item['is_deleted'] == true ? 1 : 0,
+                'is_synced': 1,
+                'client_id': item['client_id'] ?? item['id'].toString()
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
     } catch (e) {
@@ -205,37 +229,48 @@ class SyncService {
         };
 
         if (isNew) {
-          final res = await _apiClient.post(AppConstants.eventsEndpoint, data: data);
+          final res =
+              await _apiClient.post(AppConstants.eventsEndpoint, data: data);
           if (res.data['success']) {
-            await db.update('events', {
-              'id': res.data['data']['id'],
-              'is_synced': 1,
-              'version': res.data['data']['version']
-            }, where: 'client_id = ?', whereArgs: [ev['client_id']]);
+            await db.update(
+                'events',
+                {
+                  'id': res.data['data']['id'],
+                  'is_synced': 1,
+                  'version': res.data['data']['version']
+                },
+                where: 'client_id = ?',
+                whereArgs: [ev['client_id']]);
           }
         } else {
-          final res = await _apiClient.put('${AppConstants.eventsEndpoint}/${ev['id']}', data: data);
+          final res = await _apiClient
+              .put('${AppConstants.eventsEndpoint}/${ev['id']}', data: data);
           if (res.data['success']) {
-            await db.update('events', {'is_synced': 1}, where: 'id = ?', whereArgs: [ev['id']]);
+            await db.update('events', {'is_synced': 1},
+                where: 'id = ?', whereArgs: [ev['id']]);
           }
         }
       }
 
       final lastSync = _prefs.getString(AppConstants.lastSyncKey);
-      final res = await _apiClient.post('${AppConstants.eventsEndpoint}/sync', 
-        data: {'events': [], 'lastSyncTime': lastSync});
+      final res = await _apiClient.post('${AppConstants.eventsEndpoint}/sync',
+          data: {'events': [], 'lastSyncTime': lastSync});
 
       if (res.data['success']) {
         final changes = res.data['data']['serverChanges'] as List;
         for (var item in changes) {
-          await db.insert('events', {
-            ...item,
-            'is_recurring': item['is_recurring'] == true ? 1 : 0,
-            'notification_enabled': item['notification_enabled'] == true ? 1 : 0,
-            'is_deleted': item['is_deleted'] == true ? 1 : 0,
-            'is_synced': 1,
-            'client_id': item['client_id'] ?? item['id'].toString()
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          await db.insert(
+              'events',
+              {
+                ...item,
+                'is_recurring': item['is_recurring'] == true ? 1 : 0,
+                'notification_enabled':
+                    item['notification_enabled'] == true ? 1 : 0,
+                'is_deleted': item['is_deleted'] == true ? 1 : 0,
+                'is_synced': 1,
+                'client_id': item['client_id'] ?? item['id'].toString()
+              },
+              conflictAlgorithm: ConflictAlgorithm.replace);
         }
       }
     } catch (e) {

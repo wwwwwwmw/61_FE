@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/services/auth_service.dart';
 import '../../screens/home/home_screen.dart';
 
 class OtpScreen extends StatefulWidget {
   final String email;
-  const OtpScreen({super.key, required this.email});
+  final SharedPreferences prefs;
+  final VoidCallback onThemeToggle;
+  const OtpScreen(
+      {super.key,
+      required this.email,
+      required this.prefs,
+      required this.onThemeToggle});
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -12,8 +19,14 @@ class OtpScreen extends StatefulWidget {
 
 class _OtpScreenState extends State<OtpScreen> {
   final _otpController = TextEditingController();
-  final _authService = AuthService(); // Giả sử bạn đã khởi tạo đúng
+  late final AuthService _authService;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _authService = AuthService(widget.prefs);
+  }
 
   void _verify() async {
     setState(() => _isLoading = true);
@@ -26,7 +39,12 @@ class _OtpScreenState extends State<OtpScreen> {
     if (success && mounted) {
       // Chuyển đến trang chủ và xóa hết stack cũ
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeScreen(prefs: null,, onThemeToggle: () {  },)),
+        MaterialPageRoute(
+          builder: (_) => HomeScreen(
+            prefs: widget.prefs,
+            onThemeToggle: widget.onThemeToggle,
+          ),
+        ),
         (route) => false,
       );
     } else if (mounted) {

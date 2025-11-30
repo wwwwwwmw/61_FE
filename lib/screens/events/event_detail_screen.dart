@@ -41,7 +41,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     try {
       final eventDate = DateTime.parse(widget.event['event_date'].toString());
       final now = DateTime.now();
-      
+
       if (eventDate.isAfter(now)) {
         setState(() {
           _timeRemaining = eventDate.difference(now);
@@ -62,7 +62,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Widget build(BuildContext context) {
     final eventType = widget.event['event_type'] ?? 'other';
     final eventDate = widget.event['event_date'];
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Chi tiết sự kiện'),
@@ -72,7 +72,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             onPressed: () async {
               // TODO: Navigate to event form screen
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Chức năng sửa đang được phát triển')),
+                const SnackBar(
+                    content: Text('Chức năng sửa đang được phát triển')),
               );
             },
           ),
@@ -143,7 +144,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       const SizedBox(height: 8),
                       Text(
                         _formatDuration(_timeRemaining!),
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: AppColors.primary,
                             ),
@@ -213,7 +217,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             if (widget.event['notification_enabled'] == true) ...[
               Row(
                 children: [
-                  const Icon(Icons.notifications_active, color: AppColors.success, size: 20),
+                  const Icon(Icons.notifications_active,
+                      color: AppColors.success, size: 20),
                   const SizedBox(width: 8),
                   Text(
                     'Thông báo đã bật',
@@ -316,7 +321,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   String _formatDateTime(dynamic date) {
     if (date == null) return 'N/A';
     try {
-      final dateTime = date is DateTime ? date : DateTime.parse(date.toString());
+      final dateTime =
+          date is DateTime ? date : DateTime.parse(date.toString());
       return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
     } catch (e) {
       return date.toString();
