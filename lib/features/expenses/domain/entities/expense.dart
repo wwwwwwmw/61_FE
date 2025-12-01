@@ -20,14 +20,19 @@ class Expense {
   });
 
   factory Expense.fromJson(Map<String, dynamic> json) {
+    double _parseAmount(dynamic v) {
+      if (v == null) return 0.0;
+      if (v is num) return v.toDouble();
+      if (v is String) return double.tryParse(v.replaceAll(',', '')) ?? 0.0;
+      return 0.0;
+    }
+
     return Expense(
       id: json['id'],
-      amount: (json['amount'] is int)
-          ? (json['amount'] as int).toDouble()
-          : (json['amount'] as double? ?? 0.0),
+      amount: _parseAmount(json['amount']),
       categoryId: json['category_id']?.toString(),
       description: json['description'],
-      date: DateTime.parse(json['date']),
+      date: DateTime.parse(json['date'].toString()),
       type: json['type'] ?? 'expense',
       paymentMethod: json['payment_method'],
       receiptImagePath: json['receipt_image_path'],

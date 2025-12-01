@@ -6,12 +6,12 @@ import '../../screens/home/home_screen.dart';
 class OtpScreen extends StatefulWidget {
   final String email;
   final SharedPreferences prefs;
-  final VoidCallback onThemeToggle;
+  final ValueChanged<bool> onThemeChanged;
   const OtpScreen(
       {super.key,
       required this.email,
       required this.prefs,
-      required this.onThemeToggle});
+      required this.onThemeChanged});
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -42,7 +42,7 @@ class _OtpScreenState extends State<OtpScreen> {
         MaterialPageRoute(
           builder: (_) => HomeScreen(
             prefs: widget.prefs,
-            onThemeToggle: widget.onThemeToggle,
+            onThemeChanged: widget.onThemeChanged,
           ),
         ),
         (route) => false,

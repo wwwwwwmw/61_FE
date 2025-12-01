@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
+import 'core/constants/app_constants.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -45,7 +46,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _loadTheme() {
-    final theme = widget.prefs.getString('theme_mode') ?? 'system';
+    final theme = widget.prefs.getString(AppConstants.themeKey) ?? 'system';
     setState(() {
       _themeMode = theme == 'dark'
           ? ThemeMode.dark
@@ -55,15 +56,10 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
-  void _toggleTheme() {
+  void _setTheme(bool isDark) {
     setState(() {
-      if (_themeMode == ThemeMode.light) {
-        _themeMode = ThemeMode.dark;
-        widget.prefs.setString('theme_mode', 'dark');
-      } else {
-        _themeMode = ThemeMode.light;
-        widget.prefs.setString('theme_mode', 'light');
-      }
+      _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+      widget.prefs.setString(AppConstants.themeKey, isDark ? 'dark' : 'light');
     });
   }
 
@@ -80,7 +76,7 @@ class _MyAppState extends State<MyApp> {
       darkTheme: AppTheme.darkTheme,
       themeMode: _themeMode,
       home: isLoggedIn
-          ? HomeScreen(prefs: widget.prefs, onThemeToggle: _toggleTheme)
+          ? HomeScreen(prefs: widget.prefs, onThemeChanged: _setTheme)
           : LoginScreen(prefs: widget.prefs),
     );
   }

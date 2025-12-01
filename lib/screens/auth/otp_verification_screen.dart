@@ -68,7 +68,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
           MaterialPageRoute(
             builder: (_) => HomeScreen(
               prefs: widget.prefs,
-              onThemeToggle: () {},
+              onThemeChanged: (_) {},
             ),
           ),
         );

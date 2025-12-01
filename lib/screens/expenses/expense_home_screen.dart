@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/network/api_client.dart';
 import '../../core/services/expenses_service.dart';
 import '../../features/expenses/domain/entities/expense.dart';
+import '../../core/constants/app_constants.dart';
 import 'expense_form_screen.dart';
 import 'expense_detail_screen.dart';
 import 'expense_stats_screen.dart';
+import 'expense_list_screen.dart';
 
 class ExpenseHomeScreen extends StatefulWidget {
   final SharedPreferences prefs;
@@ -20,8 +23,11 @@ class ExpenseHomeScreen extends StatefulWidget {
 
 class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
   bool _isLoading = true;
+  String? _loadError;
   double _totalIncome = 0;
   double _totalExpense = 0;
+  double? _monthlyBudget;
+  String? _budgetAlert;
   List<Expense> _recentTransactions = [];
   late final ExpensesService _expensesService;
 
@@ -29,7 +35,51 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
   void initState() {
     super.initState();
     _expensesService = ExpensesService(ApiClient(widget.prefs));
+    _loadBudget();
     _loadData();
+  }
+
+  void _loadBudget() {
+    final raw = widget.prefs.getString(AppConstants.monthlyBudgetKey);
+    if (raw != null) {
+      _monthlyBudget = double.tryParse(raw);
+    }
+  }
+
+  Future<void> _setBudget() async {
+    final controller = TextEditingController(
+      text: _monthlyBudget?.toStringAsFixed(0) ?? '',
+    );
+    final result = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ngân sách tháng'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(hintText: 'Nhập số tiền (VND)'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('Hủy')),
+          TextButton(
+            onPressed: () {
+              final v = double.tryParse(controller.text);
+              Navigator.pop(ctx, v);
+            },
+            child: const Text('Lưu'),
+          ),
+        ],
+      ),
+    );
+    if (result != null) {
+      await widget.prefs
+          .setString(AppConstants.monthlyBudgetKey, result.toString());
+      setState(() {
+        _monthlyBudget = result;
+        _evaluateBudget();
+      });
+    }
   }
 
   Future<void> _loadData() async {
@@ -37,8 +87,9 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
 
     try {
       final data = await _expensesService.getExpenses();
-      final List<dynamic> expensesData =
-          data['data'] ?? []; // Assuming API returns { data: [...] } or similar
+      // Accept both {data: [...]} and direct list responses for robustness
+      final dynamic raw = data['data'] ?? data;
+      final List<dynamic> expensesData = raw is List ? raw : [];
       // Adjust based on actual API response structure.
       // If getExpenses returns Map<String, dynamic> from response.data, and response.data['data'] is the list.
       // Let's check getExpenses implementation again.
@@ -49,7 +100,23 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
           expensesData.map((e) => Expense.fromJson(e)).toList();
 
       _calculateStats(expenses);
+      _loadError = null;
     } catch (e) {
+      String message =
+          'Không thể tải dữ liệu chi tiêu. Kiểm tra kết nối server.';
+      if (e is DioException) {
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.unknown) {
+          message = 'Không thể kết nối tới server tại ${AppConstants.baseUrl}.';
+        } else if (e.response != null) {
+          message = e.response?.data is Map<String, dynamic>
+              ? (e.response?.data['message'] ?? message)
+              : message;
+        }
+      }
+      _loadError = message;
+      // ignore: avoid_print
       print('Error loading expenses: $e');
       // Handle error (show snackbar, etc.)
     } finally {
@@ -63,7 +130,11 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
     double income = 0;
     double expense = 0;
 
+    final now = DateTime.now();
+    final monthStart = DateTime(now.year, now.month, 1);
     for (var item in expenses) {
+      // Chỉ tính trong tháng hiện tại để phục vụ ngân sách tháng
+      if (item.date.isBefore(monthStart)) continue;
       if (item.type == 'income') {
         income += item.amount;
       } else {
@@ -79,6 +150,24 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
       _totalExpense = expense;
       _recentTransactions = expenses.take(10).toList();
     });
+    _evaluateBudget();
+  }
+
+  void _evaluateBudget() {
+    if (_monthlyBudget == null) {
+      _budgetAlert = null;
+      return;
+    }
+    // Net spending (expense - income) for month
+    final net = _totalExpense - _totalIncome;
+    if (net > _monthlyBudget!) {
+      final diff = net - _monthlyBudget!;
+      _budgetAlert = 'Vượt ngân sách tháng: +${_formatCurrency(diff)}';
+    } else if ((_monthlyBudget! + _totalIncome - _totalExpense) < 0) {
+      _budgetAlert = 'Ngân sách + Thu - Chi < 0 (cần xem lại).';
+    } else {
+      _budgetAlert = null;
+    }
   }
 
   Future<void> _deleteExpense(Expense exp) async {
@@ -155,6 +244,11 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
         title: const Text('Quản Lý Chi Tiêu'),
         actions: [
           IconButton(
+            tooltip: 'Đặt ngân sách tháng',
+            icon: const Icon(Icons.account_balance),
+            onPressed: _setBudget,
+          ),
+          IconButton(
             icon: const Icon(Icons.bar_chart),
             onPressed: () {
               Navigator.push(
@@ -174,6 +268,52 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  if (_budgetAlert != null) ...[
+                    Card(
+                      color: AppColors.error.withOpacity(0.15),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.warning, color: AppColors.error),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _budgetAlert!,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _setBudget,
+                              child: const Text('Sửa ngân sách'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  if (_loadError != null) ...[
+                    Card(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(_loadError!)),
+                            TextButton(
+                              onPressed: _loadData,
+                              child: const Text('Thử lại'),
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   // Summary Card
                   _buildSummaryCard(balance),
 
@@ -197,7 +337,14 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
                       if (_recentTransactions.isNotEmpty)
                         TextButton(
                           onPressed: () {
-                            // Navigate to all transactions (ExpenseListScreen) if implemented
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ExpenseListScreen(
+                                  prefs: widget.prefs,
+                                ),
+                              ),
+                            );
                           },
                           child: const Text('Xem tất cả'),
                         ),
@@ -337,31 +484,12 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
   }
 
   Widget _buildQuickStats() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildStatCard(
-            'Giao Dịch',
-            _recentTransactions.length.toString(),
-            Icons.receipt_long,
-            Colors.blue,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildStatCard(
-            'Trung Bình',
-            _formatCurrency(
-              _totalExpense /
-                  (_recentTransactions.isEmpty
-                      ? 1
-                      : _recentTransactions.length),
-            ),
-            Icons.trending_down,
-            Colors.orange,
-          ),
-        ),
-      ],
+    // Chỉ hiển thị thẻ số lượng giao dịch; bỏ thẻ "Trung Bình"
+    return _buildStatCard(
+      'Giao Dịch',
+      _recentTransactions.length.toString(),
+      Icons.receipt_long,
+      Colors.blue,
     );
   }
 
@@ -452,7 +580,6 @@ class _ExpenseHomeScreenState extends State<ExpenseHomeScreen> {
       ),
     );
   }
-
 
   Widget _buildEmptyState() {
     return Center(

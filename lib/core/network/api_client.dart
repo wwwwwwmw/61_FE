@@ -7,9 +7,10 @@ class ApiClient {
   final SharedPreferences _prefs;
 
   ApiClient(this._prefs) {
+    final customBaseUrl = _prefs.getString('api_base_url');
     _dio = Dio(
       BaseOptions(
-        baseUrl: AppConstants.baseUrl,
+        baseUrl: customBaseUrl ?? AppConstants.baseUrl,
         connectTimeout: AppConstants.connectionTimeout,
         receiveTimeout: AppConstants.receiveTimeout,
         headers: {

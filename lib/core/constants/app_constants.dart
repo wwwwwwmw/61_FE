@@ -20,6 +20,7 @@ class AppConstants {
   static const String refreshTokenKey = 'refresh_token';
   static const String lastSyncKey = 'last_sync_time';
   static const String themeKey = 'theme_mode';
+  static const String monthlyBudgetKey = 'monthly_budget';
 
   // [CÁC KEY BỊ THIẾU GÂY LỖI]
   static const String userIdKey = 'user_id';

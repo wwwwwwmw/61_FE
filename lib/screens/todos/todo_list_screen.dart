@@ -249,11 +249,11 @@ class _TodoListScreenState extends State<TodoListScreen> {
   Color _getPriorityColor(String? priority) {
     switch (priority) {
       case 'high':
-        return Colors.red.shade100; // Đỏ nhạt
+        return const Color.fromARGB(255, 185, 13, 30); // Đỏ nhạt
       case 'medium':
-        return Colors.orange.shade100; // Vàng/Cam nhạt
+        return const Color.fromARGB(255, 231, 189, 50); // Vàng/Cam nhạt
       case 'low':
-        return Colors.green.shade100; // Xanh lá nhạt
+        return const Color.fromARGB(255, 48, 177, 52); // Xanh lá nhạt
       default:
         return Colors.white;
     }
@@ -307,13 +307,31 @@ class _TodoListScreenState extends State<TodoListScreen> {
           // 2. THANH LỌC NGÀY (Nằm dưới danh mục)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: Colors.grey[50],
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface.withOpacity(0.6),
+              border: Border(
+                top: BorderSide(
+                    color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                bottom: BorderSide(
+                    color: Theme.of(context).dividerColor.withOpacity(0.1)),
+              ),
+            ),
             child: Row(
               children: [
-                const Icon(Icons.filter_list, size: 20, color: Colors.grey),
+                Icon(Icons.filter_list,
+                    size: 20,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.6)),
                 const SizedBox(width: 8),
-                const Text("Lọc ngày: ",
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(
+                  "Lọc ngày: ",
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.bold),
+                ),
                 if (_selectedDate == null)
                   TextButton(
                     onPressed: _pickDateFilter,
@@ -324,12 +342,13 @@ class _TodoListScreenState extends State<TodoListScreen> {
                     label:
                         Text(DateFormat('dd/MM/yyyy').format(_selectedDate!)),
                     onDeleted: () => setState(() => _selectedDate = null),
-                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                    backgroundColor: AppColors.primary.withOpacity(0.15),
                   ),
                 const Spacer(),
                 if (_selectedDate == null)
                   IconButton(
-                    icon: const Icon(Icons.calendar_month, color: Colors.blue),
+                    icon: Icon(Icons.calendar_month,
+                        color: Theme.of(context).colorScheme.primary),
                     onPressed: _pickDateFilter,
                   )
               ],

@@ -52,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
             MaterialPageRoute(
               builder: (_) => HomeScreen(
                 prefs: widget.prefs,
-                onThemeToggle: () {},
+                onThemeChanged: (_) {},
               ),
             ),
           );

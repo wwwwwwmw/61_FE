@@ -8,12 +8,12 @@ import '../settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final SharedPreferences prefs;
-  final VoidCallback onThemeToggle;
+  final ValueChanged<bool> onThemeChanged;
 
   const HomeScreen({
     super.key,
     required this.prefs,
-    required this.onThemeToggle,
+    required this.onThemeChanged,
   });
 
   @override
@@ -32,7 +32,8 @@ class _HomeScreenState extends State<HomeScreen> {
       TodoListScreen(prefs: widget.prefs),
       ExpenseHomeScreen(prefs: widget.prefs),
       EventListScreen(prefs: widget.prefs),
-      SettingsScreen(prefs: widget.prefs, onThemeToggle: widget.onThemeToggle),
+      SettingsScreen(
+          prefs: widget.prefs, onThemeChanged: widget.onThemeChanged),
     ];
   }
 

@@ -6,15 +6,16 @@ import '../../core/theme/app_colors.dart';
 import '../auth/login_screen.dart';
 import '../categories/category_list_screen.dart'; // Import màn hình danh mục
 import 'profile_edit_screen.dart';
+import 'dart:io';
 
 class SettingsScreen extends StatefulWidget {
   final SharedPreferences prefs;
-  final VoidCallback onThemeToggle;
+  final ValueChanged<bool> onThemeChanged;
 
   const SettingsScreen({
     super.key,
     required this.prefs,
-    required this.onThemeToggle,
+    required this.onThemeChanged,
   });
 
   @override
@@ -23,11 +24,23 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final AuthService _authService;
+  late bool _isDark;
+  String? _avatarPath;
+  String _userName = '';
+  String _userEmail = '';
 
   @override
   void initState() {
     super.initState();
     _authService = AuthService(widget.prefs);
+    _loadStateFromPrefs();
+  }
+
+  void _loadStateFromPrefs() {
+    _isDark = widget.prefs.getString(AppConstants.themeKey) == 'dark';
+    _userName = widget.prefs.getString(AppConstants.userNameKey) ?? 'User';
+    _userEmail = widget.prefs.getString(AppConstants.userEmailKey) ?? '';
+    _avatarPath = widget.prefs.getString('user_avatar_path');
   }
 
   Future<void> _logout() async {
@@ -42,9 +55,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final userName = widget.prefs.getString(AppConstants.userNameKey) ?? 'User';
-    final userEmail = widget.prefs.getString(AppConstants.userEmailKey) ?? '';
-    final isDarkMode = widget.prefs.getString(AppConstants.themeKey) == 'dark';
+    // Refresh values from prefs in build in case external changes happened
+    _loadStateFromPrefs();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Cài đặt')),
@@ -62,14 +74,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   CircleAvatar(
                     radius: 30,
                     backgroundColor: AppColors.primary.withOpacity(0.1),
-                    child: Text(
-                      userName.isNotEmpty ? userName[0].toUpperCase() : 'U',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                      ),
-                    ),
+                    backgroundImage:
+                        _avatarPath != null && _avatarPath!.isNotEmpty
+                            ? FileImage(File(_avatarPath!))
+                            : null,
+                    child: _avatarPath == null
+                        ? Text(
+                            _userName.isNotEmpty
+                                ? _userName[0].toUpperCase()
+                                : 'U',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                          )
+                        : null,
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -77,14 +97,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          userName,
+                          _userName,
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
                         Text(
-                          userEmail,
+                          _userEmail,
                           style: TextStyle(color: Colors.grey[600]),
                         ),
                       ],
@@ -116,8 +136,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   leading: const Icon(Icons.dark_mode_outlined),
                   title: const Text('Giao diện tối'),
                   trailing: Switch(
-                    value: isDarkMode,
-                    onChanged: (value) => widget.onThemeToggle(),
+                    value: _isDark,
+                    onChanged: (value) {
+                      setState(() => _isDark = value);
+                      // Đặt chế độ theo giá trị mới để tránh lệch với ThemeMode.system
+                      widget.onThemeChanged(value);
+                    },
                     activeThumbColor: AppColors.primary,
                   ),
                 ),
@@ -133,7 +157,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       MaterialPageRoute(
                         builder: (_) => CategoryListScreen(prefs: widget.prefs),
                       ),
-                    );
+                    ).then((_) => setState(() {}));
                   },
                 ),
                 const Divider(height: 1),
@@ -147,7 +171,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       MaterialPageRoute(
                         builder: (_) => ProfileEditScreen(prefs: widget.prefs),
                       ),
-                    );
+                    ).then((changed) {
+                      if (changed == true) setState(() {});
+                    });
                   },
                 ),
               ],

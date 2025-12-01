@@ -139,18 +139,26 @@ class _EventFormScreenState extends State<EventFormScreen>
         dateTime = DateTime.now().add(duration);
       }
 
-      final eventData = {
+      // Xây payload, bỏ các trường null để tránh 400 do validate
+      final Map<String, dynamic> eventData = {
         'title': _titleController.text.trim(),
         'description': _descriptionController.text.trim(),
         'event_date': dateTime.toIso8601String(),
         'color': _themeColor,
-        'is_recurring': _isRecurring,
-        'recurrence_pattern': _isRecurring ? _recurrencePattern : null,
         'notification_enabled': true,
         'event_type': _modeIndex == 1 ? 'countdown' : 'fixed',
-        'countdown_hours': _modeIndex == 1 ? _countdownHours : null,
-        'countdown_minutes': _modeIndex == 1 ? _countdownMinutes : null,
       };
+
+      if (_modeIndex == 1) {
+        eventData['countdown_hours'] = _countdownHours;
+        eventData['countdown_minutes'] = _countdownMinutes;
+      }
+      if (_isRecurring && _recurrencePattern != null) {
+        eventData['is_recurring'] = true;
+        eventData['recurrence_pattern'] = _recurrencePattern;
+      } else {
+        eventData['is_recurring'] = false;
+      }
 
       if (widget.event == null) {
         await _eventService.createEvent(eventData);

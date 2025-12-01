@@ -16,7 +16,7 @@ class EventService {
     try {
       final query = <String, dynamic>{};
       if (search != null && search.isNotEmpty) query['q'] = search;
-      if (type != null && type.isNotEmpty) query['type'] = type;
+      if (type != null && type.isNotEmpty) query['event_type'] = type;
       if (startDate != null) query['start_date'] = startDate.toIso8601String();
       if (endDate != null) query['end_date'] = endDate.toIso8601String();
 

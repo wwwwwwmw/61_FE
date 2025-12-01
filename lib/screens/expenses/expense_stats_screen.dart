@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:ung_dung_tien_ich/core/constants/app_constants.dart';
 import 'dart:convert';
 import '../../core/theme/app_colors.dart';
 import '../../core/database/app_database.dart';
@@ -21,6 +22,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
   bool _isLoading = true;
   String _selectedPeriod = 'month'; // today, week, month, year
   List<Map<String, dynamic>> _transactions = [];
+  List<Map<String, dynamic>> _allTransactions = [];
   Map<String, double> _categoryStats = {};
   final Map<int, String> _categoryNames = {};
   final List<Color> _chartColors = [
@@ -49,20 +51,26 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
       bool remoteLoaded = false;
       try {
         // Tải categories để map tên
-        final catsResp = await api.get('/categories');
-        final catsData = catsResp.data;
+        final catsResp = await api.get(AppConstants.categoriesEndpoint);
+        final catsData = (catsResp.data is Map && catsResp.data['data'] != null)
+            ? catsResp.data['data']
+            : catsResp.data;
         if (catsData is List) {
           for (final c in catsData) {
-            if (c is Map<String, dynamic> && c['id'] != null) {
+            if (c is Map && c['id'] != null) {
               _categoryNames[c['id']] = c['name'] ?? 'Danh mục';
             }
           }
         }
-        // Tải expenses (có thể cần tham số thời gian sau này)
-        final expensesResp = await api.get('/expenses');
-        final expensesData = expensesResp.data;
+        // Tải expenses
+        final expensesResp = await api.get(AppConstants.expensesEndpoint);
+        final expensesData =
+            (expensesResp.data is Map && expensesResp.data['data'] != null)
+                ? expensesResp.data['data']
+                : expensesResp.data;
         if (expensesData is List) {
-          _processStats(List<Map<String, dynamic>>.from(expensesData));
+          _allTransactions = List<Map<String, dynamic>>.from(expensesData);
+          _processStats(_allTransactions);
           remoteLoaded = true;
         }
       } catch (_) {
@@ -75,7 +83,8 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
           final prefs = await SharedPreferences.getInstance();
           final expensesJson = prefs.getString('expenses') ?? '[]';
           final List<dynamic> expenses = json.decode(expensesJson);
-          _processStats(expenses.cast<Map<String, dynamic>>());
+          _allTransactions = expenses.cast<Map<String, dynamic>>();
+          _processStats(_allTransactions);
         } else {
           final db = await AppDatabase().database;
           final result = await db.query(
@@ -84,7 +93,8 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
             whereArgs: [0],
             orderBy: 'date DESC',
           );
-          _processStats(result);
+          _allTransactions = result;
+          _processStats(_allTransactions);
         }
       }
     } catch (e) {
@@ -115,7 +125,8 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
 
     final filtered = allTransactions.where((t) {
       final date = DateTime.parse(t['date'] as String);
-      return date.isAfter(startDate) && t['type'] == 'expense';
+      final isInRange = !date.isBefore(startDate); // >= startDate
+      return isInRange && t['type'] == 'expense';
     }).toList();
 
     // Calculate category stats
@@ -236,7 +247,8 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
           if (selected) {
             setState(() {
               _selectedPeriod = value;
-              _loadStats();
+              // Chỉ xử lý lại dữ liệu đã tải, không cần refetch
+              _processStats(_allTransactions);
             });
           }
         },

@@ -1,13 +1,13 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
 
 class ExpenseFormScreen extends StatefulWidget {
   final SharedPreferences prefs;
-  final dynamic expense; // Hỗ trợ cả Map và Object Expense
-
+  final dynamic expense; // Map hoặc Expense
   const ExpenseFormScreen({super.key, required this.prefs, this.expense});
 
   @override
@@ -20,10 +20,15 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
   final _descController = TextEditingController();
   bool _isLoading = false;
   String _type = 'expense';
+  int? _categoryId;
+  DateTime _selectedDate = DateTime.now();
+  List<dynamic> _categories = [];
+  bool _isLoadingCategories = true;
 
   @override
   void initState() {
     super.initState();
+    _fetchCategories();
     if (widget.expense != null) {
       final amt = widget.expense is Map
           ? widget.expense['amount']
@@ -36,6 +41,40 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
       _amountController.text = amt.toString();
       _descController.text = desc ?? '';
       _type = (type == 'income') ? 'income' : 'expense';
+      _categoryId = widget.expense is Map
+          ? widget.expense['category_id']
+          : int.tryParse(widget.expense.categoryId ?? '');
+      final dateRaw = widget.expense is Map
+          ? widget.expense['date']
+          : widget.expense.date.toIso8601String();
+      try {
+        _selectedDate = DateTime.parse(dateRaw.toString());
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _fetchCategories() async {
+    try {
+      final client = ApiClient(widget.prefs);
+      final res =
+          await client.get('${AppConstants.categoriesEndpoint}?type=expense');
+      final data = (res.data is Map && res.data['data'] != null)
+          ? res.data['data']
+          : res.data;
+      if (data is List) {
+        setState(() {
+          _categories = data;
+          _isLoadingCategories = false;
+          // Nếu chưa chọn, mặc định danh mục đầu tiên
+          if (_categoryId == null && _categories.isNotEmpty) {
+            _categoryId = _categories.first['id'];
+          }
+        });
+      } else {
+        setState(() => _isLoadingCategories = false);
+      }
+    } catch (_) {
+      setState(() => _isLoadingCategories = false);
     }
   }
 
@@ -46,12 +85,13 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
     try {
       final client = ApiClient(widget.prefs); // [FIX]
 
-      final data = {
+      final data = <String, dynamic>{
         'amount': double.parse(_amountController.text),
         'type': _type,
-        'category_id': 1,
+        'category_id': _categoryId ??
+            (_categories.isNotEmpty ? _categories.first['id'] : 1),
         'description': _descController.text,
-        'date': DateTime.now().toIso8601String(),
+        'date': _selectedDate.toIso8601String(),
         'payment_method': 'cash',
       };
 
@@ -135,6 +175,44 @@ class _ExpenseFormScreenState extends State<ExpenseFormScreen> {
                 decoration: const InputDecoration(labelText: 'Số tiền'),
                 keyboardType: TextInputType.number,
                 validator: (v) => v!.isEmpty ? 'Nhập số tiền' : null,
+              ),
+              const SizedBox(height: 12),
+              InkWell(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) setState(() => _selectedDate = picked);
+                },
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Ngày giao dịch',
+                    prefixIcon: Icon(Icons.calendar_today),
+                  ),
+                  child: Text(DateFormat('dd/MM/yyyy').format(_selectedDate)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Chọn danh mục chi tiêu/thu nhập
+              DropdownButtonFormField<int>(
+                value: _categoryId,
+                decoration: const InputDecoration(
+                  labelText: 'Danh mục',
+                  prefixIcon: Icon(Icons.category),
+                ),
+                items: _categories
+                    .map<DropdownMenuItem<int>>((cat) => DropdownMenuItem(
+                          value: cat['id'],
+                          child: Text(cat['name'] ?? 'Danh mục'),
+                        ))
+                    .toList(),
+                onChanged: (val) => setState(() => _categoryId = val),
+                hint: _isLoadingCategories
+                    ? const Text('Đang tải danh mục...')
+                    : const Text('Chọn danh mục'),
               ),
               const SizedBox(height: 16),
               TextFormField(
