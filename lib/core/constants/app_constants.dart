@@ -3,7 +3,7 @@ class AppConstants {
   // - Nếu chạy máy ảo Android (Emulator): Dùng '10.0.2.2'
   // - Nếu chạy máy ảo iOS: Dùng 'localhost' hoặc '127.0.0.1'
   // - Nếu chạy thiết bị thật (điện thoại): Dùng IP LAN của máy tính (VD: '192.168.1.x')
-  static const String baseUrl = 'http://192.168.101.166:3000';
+  static const String baseUrl = 'http://172.20.10.3:3000';
 
   static const String apiPrefix = '/api';
 
