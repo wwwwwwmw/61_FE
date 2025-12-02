@@ -3,7 +3,9 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
+import 'dart:convert';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/expenses_service.dart';
 
 class ExpenseListScreen extends StatefulWidget {
   final SharedPreferences prefs;
@@ -18,10 +20,12 @@ class _ExpenseListScreenState extends State<ExpenseListScreen> {
   String? _error;
   List<Map<String, dynamic>> _expenses = [];
   final Map<int, String> _categoryNames = {};
+  late final ExpensesService _expensesService;
 
   @override
   void initState() {
     super.initState();
+    _expensesService = ExpensesService();
     _load();
   }
 
@@ -31,38 +35,56 @@ class _ExpenseListScreenState extends State<ExpenseListScreen> {
       _error = null;
     });
     try {
-      final api = ApiClient(widget.prefs);
-      // Categories (for names)
-      try {
-        final cats =
-            await api.get('${AppConstants.categoriesEndpoint}?type=expense');
-        final data = (cats.data is Map && cats.data['data'] != null)
-            ? cats.data['data']
-            : cats.data;
-        if (data is List) {
-          for (final c in data) {
-            if (c is Map && c['id'] != null) {
-              _categoryNames[c['id']] = c['name'] ?? 'Danh mục';
-            }
-          }
-        }
-      } catch (_) {}
+      await _loadCategories();
 
-      // Expenses
-      final res = await api.get(AppConstants.expensesEndpoint);
-      final list = (res.data is Map && res.data['data'] != null)
-          ? res.data['data']
-          : res.data;
-      if (list is List) {
-        _expenses = List<Map<String, dynamic>>.from(list);
-        // sort desc by date
-        _expenses.sort((a, b) =>
-            DateTime.parse(b['date']).compareTo(DateTime.parse(a['date'])));
-      }
+      // Local expenses
+      final res = await _expensesService.getExpenses();
+      final list = (res['data'] as List?) ?? const [];
+      _expenses = List<Map<String, dynamic>>.from(list);
+      _expenses.sort((a, b) =>
+          DateTime.parse(b['date']).compareTo(DateTime.parse(a['date'])));
     } catch (e) {
       _error = 'Không thể tải danh sách giao dịch: $e';
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadCategories() async {
+    const cacheKey = 'categories_cache_expense_map';
+    // Try API
+    try {
+      final api = ApiClient(widget.prefs);
+      final resp =
+          await api.get('${AppConstants.categoriesEndpoint}?type=expense');
+      final data = (resp.data is Map && resp.data['data'] != null)
+          ? resp.data['data']
+          : resp.data;
+      if (data is List) {
+        for (final c in data) {
+          if (c is Map && c['id'] != null) {
+            _categoryNames[c['id']] = c['name'] ?? 'Danh mục';
+          }
+        }
+        final mapForCache =
+            _categoryNames.map((k, v) => MapEntry(k.toString(), v));
+        await widget.prefs.setString(cacheKey, jsonEncode(mapForCache));
+        return;
+      }
+    } catch (_) {
+      // Fallback to cache
+      try {
+        final cached = widget.prefs.getString(cacheKey);
+        if (cached != null && cached.isNotEmpty) {
+          final decoded = jsonDecode(cached);
+          if (decoded is Map) {
+            decoded.forEach((key, value) {
+              final id = int.tryParse(key);
+              if (id != null) _categoryNames[id] = value.toString();
+            });
+          }
+        }
+      } catch (_) {}
     }
   }
 

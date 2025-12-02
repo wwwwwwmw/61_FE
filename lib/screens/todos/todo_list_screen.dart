@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import 'todo_form_screen.dart';
 import 'todo_detail_screen.dart';
 import '../../features/todo/domain/entities/todo.dart';
+import '../../core/services/todo_service.dart';
 
 class TodoListScreen extends StatefulWidget {
   final SharedPreferences prefs;
@@ -20,6 +21,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
   List<dynamic> _allTodos = []; // Lưu toàn bộ data thô từ API
   List<dynamic> _categories = [];
   bool _isLoading = true;
+  late final TodoService _todoService;
 
   // Filters
   int _selectedCategoryId = -1; // -1: Tất cả
@@ -28,6 +30,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
   @override
   void initState() {
     super.initState();
+    _todoService = TodoService();
     _loadData();
   }
 
@@ -60,22 +63,33 @@ class _TodoListScreenState extends State<TodoListScreen> {
 
   Future<void> _fetchTodos() async {
     if (_allTodos.isEmpty) setState(() => _isLoading = true);
-
     try {
-      final client = ApiClient(widget.prefs);
-      final res = await client.get(
-          AppConstants.todosEndpoint); // Lấy hết về rồi lọc ở Client cho mượt
-
-      if (res.data['success']) {
-        if (mounted) {
-          setState(() {
-            _allTodos = res.data['data'];
-            _isLoading = false;
-          });
+      final rows = await _todoService.getLocalTodos();
+      // Normalize for UI: convert tags string -> List<String>, is_completed int->bool
+      final normalized = rows.map((m) {
+        final map = Map<String, dynamic>.from(m);
+        final tags = map['tags'];
+        if (tags is String) {
+          map['tags'] = tags.isEmpty
+              ? <String>[]
+              : tags.split(',').map((e) => e.trim()).toList();
         }
+        final ic = map['is_completed'];
+        if (ic is int) map['is_completed'] = ic == 1;
+        final idel = map['is_deleted'];
+        if (idel is int) map['is_deleted'] = idel == 1;
+        return map;
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _allTodos = normalized;
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      print('Lỗi tải todos: $e');
+      // ignore: avoid_print
+      print('Lỗi tải todos local: $e');
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -187,16 +201,14 @@ class _TodoListScreenState extends State<TodoListScreen> {
       }
     }
 
-    // API Call
+    // Local update via TodoService using client_id
     try {
-      final client = ApiClient(widget.prefs);
-      await client.put('${AppConstants.todosEndpoint}/${todo['id']}', data: {
+      final String clientId = todo['client_id'];
+      await _todoService.updateTodoLocal(clientId, {
         'is_completed': newStatus,
-        'title': todo['title'],
-        'priority': todo['priority']
       });
     } catch (e) {
-      // Revert if fail (Optional)
+      // Optionally revert UI on failure
     }
   }
 
@@ -211,7 +223,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
     if (result == true) _fetchTodos();
   }
 
-  Future<void> _deleteTodo(int id) async {
+  Future<void> _deleteTodo(String clientId) async {
     final confirm = await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -229,10 +241,9 @@ class _TodoListScreenState extends State<TodoListScreen> {
 
     if (confirm == true) {
       try {
-        final client = ApiClient(widget.prefs);
-        await client.delete('${AppConstants.todosEndpoint}/$id');
+        await _todoService.deleteTodoLocal(clientId);
         setState(() {
-          _allTodos.removeWhere((t) => t['id'] == id);
+          _allTodos.removeWhere((t) => t['client_id'] == clientId);
         });
         if (mounted) {
           ScaffoldMessenger.of(context)
@@ -451,8 +462,8 @@ class _TodoListScreenState extends State<TodoListScreen> {
           final result = await Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  TodoDetailScreen(prefs: widget.prefs, todoId: todo['id']),
+              builder: (_) => TodoDetailScreen(
+                  prefs: widget.prefs, clientId: todo['client_id']),
             ),
           );
           if (result == true) _fetchTodos();
@@ -527,7 +538,7 @@ class _TodoListScreenState extends State<TodoListScreen> {
             if (value == 'edit') {
               _editTodo(todo);
             } else if (value == 'delete') {
-              _deleteTodo(todo['id']);
+              _deleteTodo(todo['client_id']);
             }
           },
           itemBuilder: (BuildContext context) => [

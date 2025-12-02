@@ -5,6 +5,7 @@ import '../../core/constants/app_constants.dart';
 import '../../core/network/api_client.dart';
 import '../../core/theme/app_colors.dart';
 import '../../features/todo/domain/entities/todo.dart';
+import '../../core/services/todo_service.dart';
 
 class TodoFormScreen extends StatefulWidget {
   final SharedPreferences prefs;
@@ -30,10 +31,12 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
   int? _selectedCategoryId;
   bool _isLoadingCategories = true;
   bool _isSaving = false;
+  late final TodoService _todoService;
 
   @override
   void initState() {
     super.initState();
+    _todoService = TodoService();
     _fetchCategories(); // Tải danh mục người dùng đã tạo
 
     if (widget.todo != null) {
@@ -77,8 +80,6 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final client = ApiClient(widget.prefs);
-
       // Lấy tên danh mục làm tag (nếu có chọn danh mục)
       List<String> tags = [];
       if (_selectedCategoryId != null) {
@@ -99,10 +100,13 @@ class _TodoFormScreenState extends State<TodoFormScreen> {
       };
 
       if (widget.todo == null) {
-        await client.post(AppConstants.todosEndpoint, data: data);
+        await _todoService.createTodoLocal(data);
       } else {
-        await client.put('${AppConstants.todosEndpoint}/${widget.todo!.id}',
-            data: data);
+        final clientId = widget.todo!.clientId ?? widget.todo!.id?.toString();
+        if (clientId == null) {
+          throw 'Thiếu client_id để cập nhật';
+        }
+        await _todoService.updateTodoLocal(clientId, data);
       }
 
       if (mounted) Navigator.pop(context, true); // Trả về true để reload list

@@ -1,112 +1,144 @@
-import '../constants/app_constants.dart';
-import '../network/api_client.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../database/app_database.dart';
+import 'sync_service.dart';
 
 class TodoService {
-  final ApiClient _apiClient;
+  TodoService();
 
-  TodoService(this._apiClient);
-
-  // Get todos with optional filters & search
-  Future<List<Map<String, dynamic>>> getTodos({
-    String? search,
-    String? categoryId,
-    String? priority,
-    bool? completed,
-  }) async {
+  Future<int?> _getCurrentUserId() async {
     try {
-      final query = <String, dynamic>{};
-      if (search != null && search.isNotEmpty) query['q'] = search;
-      if (categoryId != null && categoryId.isNotEmpty) {
-        query['category_id'] = categoryId;
-      }
-      if (priority != null && priority.isNotEmpty) query['priority'] = priority;
-      if (completed != null) query['completed'] = completed.toString();
-      final response = await _apiClient.get(
-        AppConstants.todosEndpoint,
-        queryParameters: query,
-      );
-      return List<Map<String, dynamic>>.from(response.data['data']);
-    } catch (e) {
-      print('Error getting todos: $e');
-      rethrow;
+      final prefs = await SharedPreferences.getInstance();
+      final uidStr = prefs.getString('user_id');
+      final uid = uidStr != null ? int.tryParse(uidStr) : null;
+      return uid ?? prefs.getInt('user_id');
+    } catch (_) {
+      return null;
     }
   }
 
-  // Create todo
-  Future<Map<String, dynamic>> createTodo(Map<String, dynamic> todoData) async {
-    try {
-      final response = await _apiClient.post(
-        AppConstants.todosEndpoint,
-        data: todoData,
-      );
-      return response.data['data'];
-    } catch (e) {
-      print('Error creating todo: $e');
-      rethrow;
-    }
+  // Read local todos (is_deleted = 0), newest first
+  Future<List<Map<String, dynamic>>> getLocalTodos() async {
+    final db = await AppDatabase().database;
+    final userId = await _getCurrentUserId();
+    final rows = await db.query(
+      'todos',
+      where:
+          userId != null ? 'is_deleted = 0 AND user_id = ?' : 'is_deleted = 0',
+      whereArgs: userId != null ? [userId] : null,
+      orderBy: 'created_at DESC',
+    );
+    return rows;
   }
 
-  // Update todo
-  Future<Map<String, dynamic>> updateTodo(
-    String id,
-    Map<String, dynamic> todoData,
-  ) async {
-    try {
-      final response = await _apiClient.put(
-        '${AppConstants.todosEndpoint}/$id',
-        data: todoData,
-      );
-      return response.data['data'];
-    } catch (e) {
-      print('Error updating todo: $e');
-      rethrow;
-    }
+  // Create a todo locally and mark as unsynced
+  Future<String> createTodoLocal(Map<String, dynamic> todoData) async {
+    final db = await AppDatabase().database;
+    final nowIso = DateTime.now().toIso8601String();
+    final clientId = const Uuid().v4();
+    final userId = await _getCurrentUserId();
+
+    // Convert tags: List<String> -> comma-separated String
+    final dynamic tagsValue = todoData['tags'];
+    final String tagsString = tagsValue is List
+        ? tagsValue.whereType<String>().join(',')
+        : (tagsValue is String ? tagsValue : '');
+
+    final row = <String, dynamic>{
+      'id': null, // new local row (no server id yet)
+      'client_id': clientId,
+      'title': todoData['title'] ?? '',
+      'description': todoData['description'],
+      'is_completed': 0,
+      'category_id': todoData['category_id'],
+      'priority': todoData['priority'],
+      'tags': tagsString,
+      'due_date': todoData['due_date'],
+      'reminder_time': todoData['reminder_time'],
+      'user_id': userId,
+      'is_deleted': 0,
+      'is_synced': 0,
+      'version': 1,
+      'created_at': nowIso,
+      'updated_at': nowIso,
+    };
+
+    await db.insert(
+      'todos',
+      row,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
+    // Trigger background sync
+    // Not awaited intentionally to avoid blocking UI
+    // ignore: unawaited_futures
+    SyncService().syncAll();
+
+    return clientId;
   }
 
-  // Toggle complete
-  Future<Map<String, dynamic>> toggleComplete(
-      String id, bool isCompleted) async {
-    try {
-      final response = await _apiClient.patch(
-        '${AppConstants.todosEndpoint}/$id/toggle',
-        data: {'is_completed': isCompleted},
-      );
-      return response.data['data'];
-    } catch (e) {
-      print('Error toggling complete: $e');
-      rethrow;
+  // Update a local todo by client_id and mark as unsynced
+  Future<int> updateTodoLocal(
+      String clientId, Map<String, dynamic> todoData) async {
+    final db = await AppDatabase().database;
+    final nowIso = DateTime.now().toIso8601String();
+
+    final updateMap = <String, dynamic>{
+      ...todoData,
+      'is_synced': 0,
+      'updated_at': nowIso,
+    };
+
+    // Normalize tags if provided
+    if (todoData.containsKey('tags')) {
+      final dynamic tagsValue = todoData['tags'];
+      updateMap['tags'] = tagsValue is List
+          ? tagsValue.whereType<String>().join(',')
+          : (tagsValue is String ? tagsValue : '');
     }
+
+    // Normalize is_completed if provided (bool -> int)
+    if (todoData.containsKey('is_completed')) {
+      final val = todoData['is_completed'];
+      if (val is bool) updateMap['is_completed'] = val ? 1 : 0;
+    }
+
+    final count = await db.update(
+      'todos',
+      updateMap,
+      where: 'client_id = ?',
+      whereArgs: [clientId],
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+
+    // Trigger background sync
+    // ignore: unawaited_futures
+    SyncService().syncAll();
+
+    return count;
   }
 
-  // Delete todo
-  Future<void> deleteTodo(String id) async {
-    try {
-      await _apiClient.delete('${AppConstants.todosEndpoint}/$id');
-    } catch (e) {
-      print('Error deleting todo: $e');
-      rethrow;
-    }
-  }
+  // Soft delete a local todo (is_deleted = 1) and mark as unsynced
+  Future<int> deleteTodoLocal(String clientId) async {
+    final db = await AppDatabase().database;
+    final count = await db.update(
+      'todos',
+      {
+        'is_deleted': 1,
+        'is_synced': 0,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'client_id = ?',
+      whereArgs: [clientId],
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
-  // Sync todos (backend expects { todos, lastSyncTime })
-  Future<Map<String, dynamic>> syncTodos(
-    List<Map<String, dynamic>> localTodos, {
-    DateTime? lastSyncTime,
-  }) async {
-    try {
-      final response = await _apiClient.post(
-        '${AppConstants.todosEndpoint}/sync',
-        data: {
-          'todos': localTodos,
-          'lastSyncTime':
-              (lastSyncTime ?? DateTime.fromMillisecondsSinceEpoch(0))
-                  .toIso8601String(),
-        },
-      );
-      return Map<String, dynamic>.from(response.data['data'] ?? response.data);
-    } catch (e) {
-      print('Error syncing todos: $e');
-      rethrow;
-    }
+    // Trigger background sync
+    // ignore: unawaited_futures
+    SyncService().syncAll();
+
+    return count;
   }
 }

@@ -18,7 +18,8 @@ class EventListScreen extends StatefulWidget {
 
 class _EventListScreenState extends State<EventListScreen> {
   late final EventService _eventService;
-  List<Event> _events = [];
+  // Store raw rows to retain client_id for offline-first operations
+  List<Map<String, dynamic>> _events = [];
   bool _isLoading = true;
   Timer? _timer;
   // Filters
@@ -68,7 +69,7 @@ class _EventListScreenState extends State<EventListScreen> {
       final eventsData = await _eventService.getEvents();
       if (mounted) {
         setState(() {
-          _events = eventsData.map((e) => Event.fromJson(e)).toList();
+          _events = List<Map<String, dynamic>>.from(eventsData);
           _isLoading = false;
         });
       }
@@ -81,12 +82,13 @@ class _EventListScreenState extends State<EventListScreen> {
     }
   }
 
-  Future<void> _deleteEvent(Event event) async {
+  Future<void> _deleteEvent(Map<String, dynamic> eventRow) async {
+    final displayTitle = (eventRow['title'] as String?) ?? 'sự kiện';
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Xóa sự kiện?'),
-        content: Text('Bạn có chắc muốn xóa "${event.title}" không?'),
+        content: Text('Bạn có chắc muốn xóa "$displayTitle" không?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -100,9 +102,10 @@ class _EventListScreenState extends State<EventListScreen> {
       ),
     );
 
-    if (confirm == true && event.id != null) {
+    final clientId = eventRow['client_id']?.toString();
+    if (confirm == true && clientId != null && clientId.isNotEmpty) {
       try {
-        await _eventService.deleteEvent(event.id.toString());
+        await _eventService.deleteEvent(clientId);
         _fetchEvents(); // Refresh list
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -119,13 +122,17 @@ class _EventListScreenState extends State<EventListScreen> {
     }
   }
 
-  void _navigateToForm([Event? event]) async {
+  void _navigateToForm({Map<String, dynamic>? eventRow}) async {
+    final Event? event = eventRow != null ? Event.fromJson(eventRow) : null;
+    final String? clientId =
+        eventRow != null ? eventRow['client_id']?.toString() : null;
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => EventFormScreen(
           prefs: widget.prefs,
           event: event,
+          clientId: clientId,
         ),
       ),
     );
@@ -146,12 +153,15 @@ class _EventListScreenState extends State<EventListScreen> {
     return Colors.blue;
   }
 
-  List<Event> get _filteredEvents {
-    return _events.where((e) {
+  List<Map<String, dynamic>> get _filteredEvents {
+    return _events.where((row) {
+      final String? dateStr = row['event_date'] as String?;
+      if (dateStr == null) return false;
+      final DateTime eventDate = DateTime.tryParse(dateStr) ?? DateTime.now();
       // Hiện tại schema events không có category_id, nên chỉ áp dụng lọc theo ngày.
       if (_dateRange != null) {
-        if (e.eventDate.isBefore(_dateRange!.start) ||
-            e.eventDate.isAfter(_dateRange!.end)) {
+        if (eventDate.isBefore(_dateRange!.start) ||
+            eventDate.isAfter(_dateRange!.end)) {
           return false;
         }
       }
@@ -236,8 +246,8 @@ class _EventListScreenState extends State<EventListScreen> {
                           padding: const EdgeInsets.all(16),
                           itemCount: _filteredEvents.length,
                           itemBuilder: (context, index) {
-                            final event = _filteredEvents[index];
-                            return _buildEventCard(event);
+                            final eventRow = _filteredEvents[index];
+                            return _buildEventCard(eventRow);
                           },
                         ),
                       ),
@@ -247,9 +257,15 @@ class _EventListScreenState extends State<EventListScreen> {
     );
   }
 
-  Widget _buildEventCard(Event event) {
+  Widget _buildEventCard(Map<String, dynamic> eventRow) {
+    final event = Event.fromJson(eventRow);
     final now = DateTime.now();
-    Duration difference = event.eventDate.difference(now);
+    // Với sự kiện đếm ngược có lặp lại, tính mốc tiếp theo
+    final target = (event.eventType == 'countdown' &&
+            (event.isAnnual || (event.recurrencePattern != null)))
+        ? event.nextOccurrenceAfter(now)
+        : event.eventDate;
+    Duration difference = target.difference(now);
     bool isPast = difference.isNegative;
 
     final days = difference.inDays.abs();
@@ -260,8 +276,8 @@ class _EventListScreenState extends State<EventListScreen> {
     final color = _parseColor(event.themeColor);
 
     return GestureDetector(
-      onTap: () => _navigateToForm(event),
-      onLongPress: () => _deleteEvent(event),
+      onTap: () => _navigateToForm(eventRow: eventRow),
+      onLongPress: () => _deleteEvent(eventRow),
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
@@ -305,7 +321,7 @@ class _EventListScreenState extends State<EventListScreen> {
                       IconButton(
                         icon: const Icon(Icons.delete_outline,
                             color: Colors.white),
-                        onPressed: () => _deleteEvent(event),
+                        onPressed: () => _deleteEvent(eventRow),
                       ),
                     ],
                   ),
@@ -313,7 +329,7 @@ class _EventListScreenState extends State<EventListScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                DateFormat('dd/MM/yyyy HH:mm').format(event.eventDate),
+                DateFormat('dd/MM/yyyy HH:mm').format(target),
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.9),
                   fontSize: 16,

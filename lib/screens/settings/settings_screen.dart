@@ -26,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late final AuthService _authService;
   late bool _isDark;
   String? _avatarPath;
+  String? _avatarUrl;
   String _userName = '';
   String _userEmail = '';
 
@@ -41,6 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _userName = widget.prefs.getString(AppConstants.userNameKey) ?? 'User';
     _userEmail = widget.prefs.getString(AppConstants.userEmailKey) ?? '';
     _avatarPath = widget.prefs.getString('user_avatar_path');
+    _avatarUrl = widget.prefs.getString('user_avatar_url');
   }
 
   Future<void> _logout() async {
@@ -71,26 +73,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(16),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: AppColors.primary.withOpacity(0.1),
-                    backgroundImage:
-                        _avatarPath != null && _avatarPath!.isNotEmpty
-                            ? FileImage(File(_avatarPath!))
-                            : null,
-                    child: _avatarPath == null
-                        ? Text(
-                            _userName.isNotEmpty
-                                ? _userName[0].toUpperCase()
-                                : 'U',
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primary,
-                            ),
-                          )
-                        : null,
-                  ),
+                  (() {
+                    ImageProvider<Object>? img;
+                    if (_avatarPath != null && _avatarPath!.isNotEmpty) {
+                      img = FileImage(File(_avatarPath!));
+                    } else if (_avatarUrl != null && _avatarUrl!.isNotEmpty) {
+                      final bust = DateTime.now().millisecondsSinceEpoch;
+                      img = NetworkImage(
+                        '${AppConstants.baseUrl}${_avatarUrl!}?t=$bust',
+                      );
+                    }
+                    return CircleAvatar(
+                      radius: 30,
+                      backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                      backgroundImage: img,
+                      child: img == null
+                          ? Text(
+                              _userName.isNotEmpty
+                                  ? _userName[0].toUpperCase()
+                                  : 'U',
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                            )
+                          : null,
+                    );
+                  })(),
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(

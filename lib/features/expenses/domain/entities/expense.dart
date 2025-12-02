@@ -20,7 +20,7 @@ class Expense {
   });
 
   factory Expense.fromJson(Map<String, dynamic> json) {
-    double _parseAmount(dynamic v) {
+    double parseAmount(dynamic v) {
       if (v == null) return 0.0;
       if (v is num) return v.toDouble();
       if (v is String) return double.tryParse(v.replaceAll(',', '')) ?? 0.0;
@@ -29,7 +29,7 @@ class Expense {
 
     return Expense(
       id: json['id'],
-      amount: _parseAmount(json['amount']),
+      amount: parseAmount(json['amount']),
       categoryId: json['category_id']?.toString(),
       description: json['description'],
       date: DateTime.parse(json['date'].toString()),

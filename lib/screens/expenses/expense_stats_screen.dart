@@ -4,10 +4,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'package:ung_dung_tien_ich/core/constants/app_constants.dart';
+
 import 'dart:convert';
 import '../../core/theme/app_colors.dart';
 import '../../core/database/app_database.dart';
 import '../../core/network/api_client.dart';
+import '../../core/services/expenses_service.dart';
 
 class ExpenseStatsScreen extends StatefulWidget {
   final SharedPreferences prefs;
@@ -25,6 +27,8 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
   List<Map<String, dynamic>> _allTransactions = [];
   Map<String, double> _categoryStats = {};
   final Map<int, String> _categoryNames = {};
+  final Map<int, Color> _categoryColorsById = {};
+  final Map<String, Color> _categoryColorsByName = {};
   final List<Color> _chartColors = [
     Colors.blue,
     Colors.red,
@@ -36,6 +40,10 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
     Colors.amber,
   ];
 
+  // Local totals
+  double _totalIncome = 0.0;
+  double _totalExpense = 0.0;
+
   @override
   void initState() {
     super.initState();
@@ -46,57 +54,52 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Ưu tiên gọi API để có dữ liệu đồng bộ (bao gồm category_id)
-      final api = ApiClient(widget.prefs);
-      bool remoteLoaded = false;
-      try {
-        // Tải categories để map tên
-        final catsResp = await api.get(AppConstants.categoriesEndpoint);
-        final catsData = (catsResp.data is Map && catsResp.data['data'] != null)
-            ? catsResp.data['data']
-            : catsResp.data;
-        if (catsData is List) {
-          for (final c in catsData) {
-            if (c is Map && c['id'] != null) {
-              _categoryNames[c['id']] = c['name'] ?? 'Danh mục';
-            }
-          }
-        }
-        // Tải expenses
-        final expensesResp = await api.get(AppConstants.expensesEndpoint);
-        final expensesData =
-            (expensesResp.data is Map && expensesResp.data['data'] != null)
-                ? expensesResp.data['data']
-                : expensesResp.data;
-        if (expensesData is List) {
-          _allTransactions = List<Map<String, dynamic>>.from(expensesData);
-          _processStats(_allTransactions);
-          remoteLoaded = true;
-        }
-      } catch (_) {
-        remoteLoaded = false;
+      // Optional: try to fetch categories for name mapping (best-effort)
+      await _loadCategories();
+
+      // Always read expenses locally for offline-first
+      if (kIsWeb) {
+        final prefs = await SharedPreferences.getInstance();
+        final expensesJson = prefs.getString('expenses') ?? '[]';
+        final List<dynamic> expenses = json.decode(expensesJson);
+        _allTransactions = expenses.cast<Map<String, dynamic>>();
+        _processStats(_allTransactions);
+      } else {
+        final db = await AppDatabase().database;
+        final result = await db.query(
+          'expenses',
+          where: 'is_deleted = ?',
+          whereArgs: [0],
+          orderBy: 'date DESC',
+        );
+        _allTransactions = result;
+        _processStats(_allTransactions);
       }
 
-      if (!remoteLoaded) {
-        // Fallback: local storage / sqlite
-        if (kIsWeb) {
-          final prefs = await SharedPreferences.getInstance();
-          final expensesJson = prefs.getString('expenses') ?? '[]';
-          final List<dynamic> expenses = json.decode(expensesJson);
-          _allTransactions = expenses.cast<Map<String, dynamic>>();
-          _processStats(_allTransactions);
-        } else {
-          final db = await AppDatabase().database;
-          final result = await db.query(
-            'expenses',
-            where: 'is_deleted = ?',
-            whereArgs: [0],
-            orderBy: 'date DESC',
-          );
-          _allTransactions = result;
-          _processStats(_allTransactions);
-        }
+      // Compute totals locally via service for the selected period
+      final now = DateTime.now();
+      final DateTime startDate;
+      switch (_selectedPeriod) {
+        case 'today':
+          startDate = DateTime(now.year, now.month, now.day);
+          break;
+        case 'week':
+          // Inclusive: today and 6 days before (e.g. 8/12 shows 2/12 - 8/12)
+          startDate = DateTime(now.year, now.month, now.day)
+              .subtract(const Duration(days: 6));
+          break;
+        case 'year':
+          startDate = DateTime(now.year, 1, 1);
+          break;
+        default:
+          startDate = DateTime(now.year, now.month, 1);
       }
+      final stats = await ExpensesService().getStatistics(
+        startDate: startDate,
+        endDate: now,
+      );
+      _totalIncome = (stats['totalIncome'] as num?)?.toDouble() ?? 0.0;
+      _totalExpense = (stats['totalExpense'] as num?)?.toDouble() ?? 0.0;
     } catch (e) {
       print('Error loading stats: $e');
     } finally {
@@ -114,7 +117,8 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
         startDate = DateTime(now.year, now.month, now.day);
         break;
       case 'week':
-        startDate = now.subtract(const Duration(days: 7));
+        startDate = DateTime(now.year, now.month, now.day)
+            .subtract(const Duration(days: 6));
         break;
       case 'year':
         startDate = DateTime(now.year, 1, 1);
@@ -156,6 +160,75 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
     });
   }
 
+  Future<void> _loadCategories() async {
+    // Try API first; cache map id->name
+    const cacheKeyNames = 'categories_cache_expense_map';
+    const cacheKeyColors = 'categories_cache_expense_colors';
+    try {
+      final api = ApiClient(widget.prefs);
+      final resp =
+          await api.get('${AppConstants.categoriesEndpoint}?type=expense');
+      final data = (resp.data is Map && resp.data['data'] != null)
+          ? resp.data['data']
+          : resp.data;
+      if (data is List) {
+        for (final c in data) {
+          if (c is Map && c['id'] != null) {
+            _categoryNames[c['id']] = c['name'] ?? 'Danh mục';
+            final colorHex = (c['color'] ?? '#3498db').toString();
+            final parsed = _parseColor(colorHex);
+            _categoryColorsById[c['id']] = parsed;
+            final name = _categoryNames[c['id']]!;
+            _categoryColorsByName[name] = parsed;
+          }
+        }
+        // Persist cache
+        final namesForCache =
+            _categoryNames.map((k, v) => MapEntry(k.toString(), v));
+        await widget.prefs.setString(cacheKeyNames, jsonEncode(namesForCache));
+        final colorsForCache = _categoryColorsById
+            .map((k, v) => MapEntry(k.toString(), _colorToHex(v)));
+        await widget.prefs
+            .setString(cacheKeyColors, jsonEncode(colorsForCache));
+        return;
+      }
+    } catch (_) {
+      // ignore and fallback below
+    }
+    // Fallback to cache
+    try {
+      final cachedNames = widget.prefs.getString(cacheKeyNames);
+      if (cachedNames != null && cachedNames.isNotEmpty) {
+        final decoded = jsonDecode(cachedNames);
+        if (decoded is Map) {
+          decoded.forEach((key, value) {
+            final id = int.tryParse(key);
+            if (id != null) _categoryNames[id] = value.toString();
+          });
+        }
+      }
+      final cachedColors = widget.prefs.getString(cacheKeyColors);
+      if (cachedColors != null && cachedColors.isNotEmpty) {
+        final decoded = jsonDecode(cachedColors);
+        if (decoded is Map) {
+          decoded.forEach((key, value) {
+            final id = int.tryParse(key);
+            if (id != null) {
+              final color = _parseColor(value.toString());
+              _categoryColorsById[id] = color;
+            }
+          });
+          // Build name->color map if names loaded
+          _categoryColorsByName.clear();
+          _categoryNames.forEach((id, name) {
+            final color = _categoryColorsById[id];
+            if (color != null) _categoryColorsByName[name] = color;
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
   String _formatCurrency(double amount) {
     final formatter = NumberFormat.currency(
       locale: 'vi_VN',
@@ -165,9 +238,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
     return formatter.format(amount);
   }
 
-  double get _totalExpense {
-    return _categoryStats.values.fold(0, (sum, amount) => sum + amount);
-  }
+  double get _balance => _totalIncome - _totalExpense;
 
   @override
   Widget build(BuildContext context) {
@@ -183,7 +254,7 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
 
                 const SizedBox(height: 24),
 
-                // Total Expense Card
+                // Summary Card
                 _buildTotalCard(),
 
                 const SizedBox(height: 24),
@@ -247,8 +318,9 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
           if (selected) {
             setState(() {
               _selectedPeriod = value;
-              // Chỉ xử lý lại dữ liệu đã tải, không cần refetch
-              _processStats(_allTransactions);
+              // Reload to recompute local totals and filtered stats
+              // ignore: discarded_futures
+              _loadStats();
             });
           }
         },
@@ -258,15 +330,16 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
   }
 
   Widget _buildTotalCard() {
+    final balanceColor = _balance >= 0 ? AppColors.success : AppColors.error;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.error, AppColors.error.withValues(alpha: 0.7)],
+          colors: [balanceColor, balanceColor.withValues(alpha: 0.7)],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.error.withValues(alpha: 0.3),
+            color: balanceColor.withValues(alpha: 0.3),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -277,12 +350,12 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Tổng Chi Tiêu',
+            'Tổng Quan',
             style: TextStyle(color: Colors.white70, fontSize: 16),
           ),
           const SizedBox(height: 8),
           Text(
-            _formatCurrency(_totalExpense),
+            _formatCurrency(_balance),
             style: const TextStyle(
               color: Colors.white,
               fontSize: 36,
@@ -294,15 +367,83 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
             '${_transactions.length} giao dịch',
             style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
+          // Date range display for clarity
+          const SizedBox(height: 4),
+          Text(
+            _rangeLabel(),
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Thu nhập',
+                        style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatCurrency(_totalIncome),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    const Text('Chi tiêu',
+                        style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 4),
+                    Text(
+                      _formatCurrency(_totalExpense),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
+  }
+
+  String _rangeLabel() {
+    final now = DateTime.now();
+    DateTime start;
+    switch (_selectedPeriod) {
+      case 'today':
+        start = DateTime(now.year, now.month, now.day);
+        break;
+      case 'week':
+        start = DateTime(now.year, now.month, now.day)
+            .subtract(const Duration(days: 6));
+        break;
+      case 'year':
+        start = DateTime(now.year, 1, 1);
+        break;
+      default:
+        start = DateTime(now.year, now.month, 1);
+    }
+    final df = DateFormat('dd/MM');
+    return '${df.format(start)} - ${df.format(now)}';
   }
 
   Widget _buildPieChart() {
     if (_categoryStats.isEmpty) return const SizedBox();
 
     final entries = _categoryStats.entries.toList();
+    final totalForPie =
+        _categoryStats.values.fold<double>(0.0, (a, b) => a + b);
 
     return SizedBox(
       height: 250,
@@ -311,12 +452,15 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
           sections: entries.asMap().entries.map((entry) {
             final index = entry.key;
             final data = entry.value;
-            final percentage = (data.value / _totalExpense * 100);
+            final percentage =
+                totalForPie == 0 ? 0 : (data.value / totalForPie * 100);
 
+            final color = _categoryColorsByName[data.key] ??
+                _chartColors[index % _chartColors.length];
             return PieChartSectionData(
               value: data.value,
               title: '${percentage.toStringAsFixed(1)}%',
-              color: _chartColors[index % _chartColors.length],
+              color: color,
               radius: 100,
               titleStyle: const TextStyle(
                 fontSize: 12,
@@ -335,12 +479,16 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
   List<Widget> _buildCategoryList() {
     final entries = _categoryStats.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
+    final totalForList =
+        _categoryStats.values.fold<double>(0.0, (a, b) => a + b);
 
     return entries.asMap().entries.map((entry) {
       final index = entry.key;
       final data = entry.value;
-      final percentage = (data.value / _totalExpense * 100);
-      final color = _chartColors[index % _chartColors.length];
+      final percentage =
+          totalForList == 0 ? 0 : (data.value / totalForList * 100);
+      final color = _categoryColorsByName[data.key] ??
+          _chartColors[index % _chartColors.length];
 
       return Card(
         margin: const EdgeInsets.only(bottom: 8),
@@ -370,6 +518,17 @@ class _ExpenseStatsScreenState extends State<ExpenseStatsScreen> {
         ),
       );
     }).toList();
+  }
+
+  Color _parseColor(String hex) {
+    var clean = hex.replaceAll('#', '');
+    if (clean.length == 6) clean = 'FF$clean';
+    final value = int.tryParse(clean, radix: 16) ?? 0xFF3498DB;
+    return Color(value);
+  }
+
+  String _colorToHex(Color color) {
+    return '#${color.value.toRadixString(16).toUpperCase().padLeft(8, '0').substring(2)}';
   }
 
   Widget _buildEmptyState() {

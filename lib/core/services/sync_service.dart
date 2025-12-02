@@ -62,6 +62,7 @@ class SyncService {
       await _syncTodos(db);
       await _syncExpenses(db);
       await _syncEvents(db);
+      await _syncBudgets(db);
 
       await _prefs.setString(
           AppConstants.lastSyncKey, DateTime.now().toIso8601String());
@@ -275,6 +276,66 @@ class SyncService {
       }
     } catch (e) {
       print('Sync Events Error: $e');
+    }
+  }
+
+  // --- 4. SYNC BUDGETS ---
+  Future<void> _syncBudgets(Database db) async {
+    try {
+      final unsynced = await db.query('budgets', where: 'is_synced = 0');
+      for (var b in unsynced) {
+        final isNew = b['id'] == null;
+        final data = {
+          'category_id': b['category_id'],
+          'amount': b['amount'],
+          'period': b['period'],
+          'start_date': b['start_date'],
+          'end_date': b['end_date'],
+          'alert_threshold': b['alert_threshold'],
+          'is_active': (b['is_active'] as int? ?? 1) == 1,
+          'client_id': b['client_id'],
+        };
+
+        if (isNew) {
+          final res =
+              await _apiClient.post(AppConstants.budgetsEndpoint, data: data);
+          if (res.data['success']) {
+            await db.update(
+              'budgets',
+              {
+                'id': res.data['data']['id'],
+                'is_synced': 1,
+                'version': res.data['data']['version'] ?? 1,
+                'updated_at': res.data['data']['updated_at'] ??
+                    DateTime.now().toIso8601String(),
+              },
+              where: 'client_id = ?',
+              whereArgs: [b['client_id']],
+            );
+          }
+        } else {
+          final res = await _apiClient
+              .put('${AppConstants.budgetsEndpoint}/${b['id']}', data: data);
+          if (res.data['success']) {
+            await db.update(
+              'budgets',
+              {
+                'is_synced': 1,
+                'version': res.data['data']['version'] ?? 1,
+                'updated_at': res.data['data']['updated_at'] ??
+                    DateTime.now().toIso8601String(),
+              },
+              where: 'id = ?',
+              whereArgs: [b['id']],
+            );
+          }
+        }
+      }
+
+      // Pull server changes (if a sync endpoint exists in future)
+      // For now, rely on regular GET endpoints in UI.
+    } catch (e) {
+      print('Sync Budgets Error: $e');
     }
   }
 }

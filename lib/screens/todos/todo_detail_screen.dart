@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
-import '../../core/network/api_client.dart';
-import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../features/todo/domain/entities/todo.dart'; // [QUAN TRỌNG] Import Todo Entity
 import 'todo_form_screen.dart';
+import '../../core/database/app_database.dart';
+import '../../core/services/todo_service.dart';
 
 class TodoDetailScreen extends StatefulWidget {
   final SharedPreferences prefs;
-  final int todoId;
+  final String clientId;
 
   const TodoDetailScreen(
-      {super.key, required this.prefs, required this.todoId});
+      {super.key, required this.prefs, required this.clientId});
 
   @override
   State<TodoDetailScreen> createState() => _TodoDetailScreenState();
@@ -21,24 +21,27 @@ class TodoDetailScreen extends StatefulWidget {
 class _TodoDetailScreenState extends State<TodoDetailScreen> {
   Todo? _todo; // [FIX] Đổi kiểu từ Map thành Todo object
   bool _isLoading = true;
+  late final TodoService _todoService;
 
   @override
   void initState() {
     super.initState();
+    _todoService = TodoService();
     _fetchDetail();
   }
 
   Future<void> _fetchDetail() async {
     try {
-      final client = ApiClient(widget.prefs);
-      final res =
-          await client.get('${AppConstants.todosEndpoint}/${widget.todoId}');
-      if (res.data['success']) {
+      final db = await AppDatabase().database;
+      final rows = await db.query('todos',
+          where: 'client_id = ?', whereArgs: [widget.clientId], limit: 1);
+      if (rows.isNotEmpty) {
         setState(() {
-          // [FIX] Parse JSON thành Todo object ngay khi lấy về
-          _todo = Todo.fromJson(res.data['data']);
+          _todo = Todo.fromJson(rows.first);
           _isLoading = false;
         });
+      } else {
+        if (mounted) Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) Navigator.pop(context);
@@ -64,8 +67,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
     if (confirm == true) {
       try {
-        final client = ApiClient(widget.prefs);
-        await client.delete('${AppConstants.todosEndpoint}/${widget.todoId}');
+        await _todoService.deleteTodoLocal(widget.clientId);
         if (mounted) Navigator.pop(context, true);
       } catch (e) {
         ScaffoldMessenger.of(context)

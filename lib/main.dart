@@ -17,10 +17,10 @@ void main() async {
 
   // 1. Khởi tạo Sync Service
   SyncService().initialize(prefs);
-  SyncService().startSyncService();
+  // Trì hoãn việc bắt đầu đồng bộ cho tới khi UI sẵn sàng
 
-  // 2. Khởi tạo Notification Service
-  await NotificationService().initialize();
+  // 2. Khởi tạo Notification Service (new unified init)
+  await NotificationService().init();
 
   // 3. Kết nối Socket
   SocketService().connect();

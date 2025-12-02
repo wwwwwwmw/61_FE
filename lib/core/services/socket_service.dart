@@ -1,7 +1,7 @@
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import 'package:flutter/foundation.dart';
 import '../constants/app_constants.dart';
-import 'notification_service.dart'; // Import service mới tạo
+import 'notification_service.dart'; // Import service để hiển thị thông báo
 
 typedef ReminderCallback = void Function(Map<String, dynamic> data);
 
@@ -42,10 +42,10 @@ class SocketService with ChangeNotifier {
       print("📩 Nhận nhắc nhở: $data");
       if (data is Map) {
         // Hiển thị thông báo Local
-        NotificationService().showNotification(
-          id: data['id'] ?? 0,
+        NotificationService().showImmediate(
+          id: (data['id'] ?? 0) as int,
           title: "⏰ Nhắc nhở công việc",
-          body: data['message'] ?? "Bạn có công việc sắp đến hạn!",
+          body: (data['message'] ?? "Bạn có công việc sắp đến hạn!").toString(),
         );
       }
     });
@@ -53,10 +53,11 @@ class SocketService with ChangeNotifier {
     _socket!.on('todo_deadline', (data) {
       print("⏳ Đến hạn công việc: $data");
       if (data is Map) {
-        NotificationService().showNotification(
-          id: (data['id'] ?? 0) + 500, // tránh trùng với reminder
-          title: data['title'] ?? "⏳ Công việc đến hạn",
-          body: data['message'] ?? "Một công việc đã đến hạn chót!",
+        NotificationService().showImmediate(
+          id: ((data['id'] ?? 0) as int) + 500, // tránh trùng với reminder
+          title: (data['title'] ?? "⏳ Công việc đến hạn").toString(),
+          body:
+              (data['message'] ?? "Một công việc đã đến hạn chót!").toString(),
         );
       }
     });
@@ -64,10 +65,14 @@ class SocketService with ChangeNotifier {
     _socket!.on('event_due', (data) {
       print("🎉 Nhận sự kiện: $data");
       if (data is Map) {
-        NotificationService().showNotification(
-          id: (data['id'] ?? 0) + 1000, // ID khác todo để không bị đè
-          title: data['title'] ?? "🎉 Sự kiện diễn ra",
-          body: data['message'] ?? "Sự kiện ${data['title']} đang diễn ra!",
+        final title = (data['title'] ?? "🎉 Sự kiện diễn ra").toString();
+        final body =
+            (data['message'] ?? "Sự kiện ${data['title']} đang diễn ra!")
+                .toString();
+        NotificationService().showImmediate(
+          id: ((data['id'] ?? 0) as int) + 1000, // ID khác todo để không bị đè
+          title: title,
+          body: body,
         );
       }
     });

@@ -5,15 +5,18 @@ import '../../core/theme/app_colors.dart';
 import '../../core/network/api_client.dart';
 import '../../core/services/event_service.dart';
 import '../../features/events/domain/entities/event.dart';
+import '../../core/services/notification_service.dart';
 
 class EventFormScreen extends StatefulWidget {
   final SharedPreferences prefs;
   final Event? event;
+  final String? clientId;
 
   const EventFormScreen({
     super.key,
     required this.prefs,
     this.event,
+    this.clientId,
   });
 
   @override
@@ -147,23 +150,100 @@ class _EventFormScreenState extends State<EventFormScreen>
         'color': _themeColor,
         'notification_enabled': true,
         'event_type': _modeIndex == 1 ? 'countdown' : 'fixed',
+        'recurrence_pattern': _isRecurring ? _recurrencePattern : null,
       };
 
       if (_modeIndex == 1) {
         eventData['countdown_hours'] = _countdownHours;
         eventData['countdown_minutes'] = _countdownMinutes;
       }
-      if (_isRecurring && _recurrencePattern != null) {
-        eventData['is_recurring'] = true;
-        eventData['recurrence_pattern'] = _recurrencePattern;
-      } else {
-        eventData['is_recurring'] = false;
-      }
+      eventData['is_recurring'] = _isRecurring && _recurrencePattern != null;
 
       if (widget.event == null) {
-        await _eventService.createEvent(eventData);
+        final created = await _eventService.createEvent(eventData);
+        // Schedule notification if enabled
+        if (eventData['notification_enabled'] == true) {
+          final clientId = created['client_id'] as String;
+          final when = DateTime.parse(created['event_date'] as String);
+          final pattern = eventData['recurrence_pattern'] as String?;
+          if (pattern == 'daily' || pattern == 'weekly') {
+            // ignore: discarded_futures
+            NotificationService().scheduleRecurringEventNotification(
+              id: clientId,
+              dateTime: when,
+              recurrencePattern: pattern!,
+              title: created['title'] ?? 'Sự kiện',
+              body: 'Sự kiện sắp diễn ra',
+            );
+          } else {
+            // ignore: discarded_futures
+            NotificationService().scheduleEventNotification(
+              id: clientId,
+              dateTime: when,
+              title: created['title'] ?? 'Sự kiện',
+              body: 'Sự kiện sắp diễn ra',
+            );
+          }
+        }
       } else {
-        await _eventService.updateEvent(widget.event!.id.toString(), eventData);
+        final String? cid = widget.clientId;
+        if (cid != null && cid.isNotEmpty) {
+          await _eventService.updateEvent(cid, eventData);
+          if (eventData['notification_enabled'] == true) {
+            final when = DateTime.parse(eventData['event_date'] as String);
+            final pattern = eventData['recurrence_pattern'] as String?;
+            if (pattern == 'daily' || pattern == 'weekly') {
+              // ignore: discarded_futures
+              NotificationService().scheduleRecurringEventNotification(
+                id: cid,
+                dateTime: when,
+                recurrencePattern: pattern!,
+                title: eventData['title'] ?? 'Sự kiện',
+                body: 'Sự kiện sắp diễn ra',
+              );
+            } else {
+              // ignore: discarded_futures
+              NotificationService().scheduleEventNotification(
+                id: cid,
+                dateTime: when,
+                title: eventData['title'] ?? 'Sự kiện',
+                body: 'Sự kiện sắp diễn ra',
+              );
+            }
+          } else {
+            // Cancel if disabled
+            // ignore: discarded_futures
+            NotificationService().cancelEventNotification(cid);
+          }
+        } else if (widget.event?.id != null) {
+          await _eventService.updateEvent(
+              widget.event!.id.toString(), eventData);
+          if (eventData['notification_enabled'] == true) {
+            final when = DateTime.parse(eventData['event_date'] as String);
+            final legacyId = widget.event!.id.toString();
+            final pattern = eventData['recurrence_pattern'] as String?;
+            if (pattern == 'daily' || pattern == 'weekly') {
+              // ignore: discarded_futures
+              NotificationService().scheduleRecurringEventNotification(
+                id: legacyId,
+                dateTime: when,
+                recurrencePattern: pattern!,
+                title: eventData['title'] ?? 'Sự kiện',
+                body: 'Sự kiện sắp diễn ra',
+              );
+            } else {
+              // ignore: discarded_futures
+              NotificationService().scheduleEventNotification(
+                id: legacyId,
+                dateTime: when,
+                title: eventData['title'] ?? 'Sự kiện',
+                body: 'Sự kiện sắp diễn ra',
+              );
+            }
+          }
+        } else {
+          throw 'Không có client_id hoặc id hợp lệ để cập nhật';
+        }
       }
 
       if (mounted) {

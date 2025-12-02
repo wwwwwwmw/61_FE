@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/services/sync_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../todos/todo_list_screen.dart';
 import '../expenses/expense_home_screen.dart';
@@ -35,6 +36,11 @@ class _HomeScreenState extends State<HomeScreen> {
       SettingsScreen(
           prefs: widget.prefs, onThemeChanged: widget.onThemeChanged),
     ];
+
+    // Bắt đầu đồng bộ sau khi khung hình đầu tiên được vẽ (UI sẵn sàng)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      SyncService().startSyncService();
+    });
   }
 
   @override

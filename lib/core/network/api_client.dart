@@ -14,7 +14,6 @@ class ApiClient {
         connectTimeout: AppConstants.connectionTimeout,
         receiveTimeout: AppConstants.receiveTimeout,
         headers: {
-          'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
       ),
@@ -87,6 +86,34 @@ class ApiClient {
   // Generic PATCH request
   Future<Response> patch(String path, {dynamic data}) async {
     return await _dio.patch(path, data: data);
+  }
+
+  // Multipart helper
+  Future<FormData> multipart({
+    required String path,
+    required String filePath,
+    required String fieldName,
+  }) async {
+    return FormData.fromMap({
+      fieldName: await MultipartFile.fromFile(
+        filePath,
+        filename: filePath.split(RegExp(r'[\\/]')).last,
+      ),
+    });
+  }
+
+  Future<Response> patchMultipart(String path, FormData formData) async {
+    return await _dio.patch(
+      path,
+      data: formData,
+      options: Options(
+        headers: {
+          // Let Dio set proper boundary; just declare multipart
+          'Content-Type': 'multipart/form-data',
+          'Accept': 'application/json',
+        },
+      ),
+    );
   }
 
   // Generic DELETE request

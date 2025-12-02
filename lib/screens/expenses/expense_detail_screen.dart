@@ -5,6 +5,9 @@ import 'expense_form_screen.dart';
 import 'package:intl/intl.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/constants/app_constants.dart';
+import '../../core/network/api_client.dart';
+import 'dart:convert';
 
 class ExpenseDetailScreen extends StatelessWidget {
   final Expense expense;
@@ -129,11 +132,17 @@ class ExpenseDetailScreen extends StatelessWidget {
 
             // Category
             if (expense.categoryId != null)
-              _buildInfoRow(
-                context,
-                'Danh mục',
-                expense.categoryId!, // TODO: Map ID to Name if needed
-                icon: Icons.category,
+              FutureBuilder<String>(
+                future: _resolveCategoryName(context, expense.categoryId!),
+                builder: (context, snapshot) {
+                  final name = snapshot.data ?? 'Danh mục';
+                  return _buildInfoRow(
+                    context,
+                    'Danh mục',
+                    name,
+                    icon: Icons.category,
+                  );
+                },
               ),
 
             const Divider(height: 32),
@@ -177,6 +186,44 @@ class ExpenseDetailScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<String> _resolveCategoryName(
+      BuildContext context, String idStr) async {
+    final intId = int.tryParse(idStr);
+    // Try API to refresh, then cache
+    try {
+      final api = ApiClient(prefs);
+      final res =
+          await api.get('${AppConstants.categoriesEndpoint}?type=expense');
+      final data = (res.data is Map && res.data['data'] != null)
+          ? res.data['data']
+          : res.data;
+      if (data is List) {
+        final map = <String, String>{};
+        for (final c in data) {
+          if (c is Map && c['id'] != null) {
+            map[c['id'].toString()] = (c['name'] ?? 'Danh mục').toString();
+          }
+        }
+        await prefs.setString('categories_cache_expense', jsonEncode(map));
+        final key = intId?.toString() ?? idStr;
+        return map[key] ?? 'Danh mục';
+      }
+    } catch (_) {
+      // ignore
+    }
+    // Fallback to cache
+    try {
+      final cached = prefs.getString('categories_cache_expense');
+      if (cached != null && cached.isNotEmpty) {
+        final map = Map<String, dynamic>.from(jsonDecode(cached));
+        final key = intId?.toString() ?? idStr;
+        final name = map[key]?.toString();
+        if (name != null && name.isNotEmpty) return name;
+      }
+    } catch (_) {}
+    return 'Danh mục #${intId ?? idStr}';
   }
 
   Widget _buildInfoRow(
